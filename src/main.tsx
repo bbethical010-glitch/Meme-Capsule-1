@@ -4,6 +4,7 @@ import AdminApp from "./admin/AdminApp";
 import AdminGate from "./admin/AdminGate";
 import CatApp from "./categorise/CatApp";
 import CurateApp from "./curate/CurateApp";
+import AiJudgeApp from "./ai-judge/AiJudgeApp";
 import App from "./App";
 import "./styles.css";
 
@@ -41,6 +42,10 @@ function RootRouter() {
 
   if (route.pathname.startsWith("/curate") || route.hash.startsWith("#/curate")) {
     return <CurateApp />;
+  }
+
+  if (route.pathname.startsWith("/ai-judge") || route.hash.startsWith("#/ai-judge")) {
+    return <AiJudgeApp />;
   }
 
   if (route.pathname.startsWith("/categorise") || route.hash.startsWith("#/categorise")) {
