@@ -1,6 +1,7 @@
 import type { PagesFunction } from "../../_shared/pages";
 import { json, type Env } from "../../_shared/d1r2";
 import { requireAiJudgeAuth } from "../../_shared/aiJudgeAuth";
+import { encryptApiKey, decryptApiKey } from "../../_shared/crypto";
 
 const TOPICS = ["Everyday Life", "Work / Education", "Relationships", "Family", "Politics / Society", "Internet Culture", "Pop Culture", "Gaming", "Animals", "Food", "Technology", "Other"];
 const TONES = ["Wholesome", "Dark", "Chaotic", "Cynical", "Awkward", "Neutral"];
@@ -65,6 +66,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const run = await env.DB.prepare("SELECT id, status FROM ai_judge_runs WHERE id = ? AND user_id = ?").bind(runId, user.id).first<{ id: string; status: string }>();
   if (!run || run.status !== "running") return fail("Run is not active.");
   if (!config?.api_key) return fail("AI provider configuration is missing.");
+
+  const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
+  const plainApiKey = await decryptApiKey(config.api_key, secretSeed);
+  if (!plainApiKey) return fail("AI provider configuration key is invalid.");
+
+  // Auto-encrypt legacy plaintext key on use if present
+  if (!config.api_key.startsWith("enc:v1:")) {
+    const encrypted = await encryptApiKey(config.api_key, secretSeed);
+    await env.DB.prepare(
+      "UPDATE ai_judge_config SET api_key = ? WHERE user_id = ?"
+    ).bind(encrypted, user.id).run().catch(() => undefined);
+  }
+
   try {
     const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(30000) });
     if (!imageResponse.ok) throw new Error(`Image request failed with ${imageResponse.status}.`);
@@ -83,7 +97,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const content = [{ type: "text", text: buildPrompt() }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}`, ...(config.provider === "openai" ? { detail: "low" } : {}) } }];
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { Authorization: `Bearer ${config.api_key}`, "Content-Type": "application/json", Accept: "application/json" },
+          headers: { Authorization: `Bearer ${plainApiKey}`, "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ model: config.model, temperature: config.temperature, max_tokens: 400, stream: false, messages: [{ role: "user", content }], ...(config.provider === "openai" ? { response_format: { type: "json_object" } } : {}) }),
           signal: AbortSignal.timeout(25000)
         });

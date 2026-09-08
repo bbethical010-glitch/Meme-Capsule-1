@@ -48,6 +48,7 @@ Backend (Phase 2 — COMPLETE):
 - Judge Account Management (`CurateAccountModal.tsx`, `/api/curate/account`): Self-service username, display name, and password management with strict judge-level session isolation.
 - Judge-Isolated AI Presets (`cat_judge_ai_presets`, `/api/curate/ai-presets`): Judges can save and switch between private model presets with strict backend database and namespaced storage isolation.
 - Nuanced Meme Authenticity Evaluation (`aiJudgePrompt.ts`): Cultural intent protocol distinguishing legitimate meme forms (captioned, image-only reaction, absurdist/surreal shitposts) from ordinary non-meme photographs.
+- End-to-End At-Rest API Key Encryption: All AI API keys across both `cat_judge_ai_presets` and `ai_judge_config` are encrypted using AES-GCM-256 (`enc:v1:`) at rest in D1, preventing plaintext exposure in SQL queries, logs, and database dumps with automatic on-read migration.
 
 Git: Connected to `https://github.com/editorav010-dev/Meme-Capsule` on branch `main`.
 
