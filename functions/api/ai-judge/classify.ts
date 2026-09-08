@@ -43,7 +43,10 @@ const validateResult = (raw: Record<string, unknown>): Result => {
       !DECISIONS.includes(decision) || !Number.isFinite(confidence)) {
     throw new Error("Model response did not match the required taxonomy.");
   }
-  return { topics, tone, humour_mechanisms: mechanisms, decision, confidence, reasoning: typeof raw.reasoning === "string" ? raw.reasoning.slice(0, 500) : "No reasoning provided." };
+  if (typeof raw.reasoning !== "string" || !raw.reasoning.trim()) {
+    throw new Error("Model response is missing reasoning.");
+  }
+  return { topics, tone, humour_mechanisms: mechanisms, decision, confidence, reasoning: raw.reasoning.slice(0, 500) };
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -95,6 +98,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       try {
         const endpoint = config.provider === "openai" ? "https://api.openai.com/v1/chat/completions" : "https://integrate.api.nvidia.com/v1/chat/completions";
         const content = [{ type: "text", text: buildPrompt() }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}`, ...(config.provider === "openai" ? { detail: "low" } : {}) } }];
+        console.log(`[ai-judge] AI call starting: provider=${config.provider}, model=${config.model}, attempt=${attempt}/${retries}, meme_id=${memeId}`);
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { Authorization: `Bearer ${plainApiKey}`, "Content-Type": "application/json", Accept: "application/json" },
@@ -105,10 +109,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         const payload = (await response.json()) as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
         rawText = payload.choices?.[0]?.message?.content || "";
         tokens = payload.usage?.total_tokens || 0;
-        result = validateResult(extractJson(rawText));
+        console.log(`[ai-judge] Raw AI response: ${rawText}`);
+        try {
+          result = validateResult(extractJson(rawText));
+          console.log(`[ai-judge] AI response parsing succeeded: meme_id=${memeId}`);
+        } catch (parseError: unknown) {
+          const parseMessage = parseError instanceof Error ? parseError.message : "Unknown response parsing error.";
+          console.error(`[ai-judge] AI response parsing failed: meme_id=${memeId}, error=${parseMessage}`);
+          throw parseError;
+        }
         break;
       } catch (error: unknown) {
         lastError = error instanceof Error ? error.message : "AI request failed.";
+        console.error(`[ai-judge] AI attempt failed: meme_id=${memeId}, attempt=${attempt}/${retries}, error=${lastError}`);
         if (attempt < retries) await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
       }
     }
