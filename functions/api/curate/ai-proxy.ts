@@ -40,11 +40,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const payload = (await request.json().catch(() => ({}))) as ProxyPayload;
-    const endpoint = (payload.endpoint || "").trim();
+    let endpoint = (payload.endpoint || "").trim();
     const apiKey = (payload.apiKey || "").trim();
 
     if (!endpoint || !endpoint.startsWith("http")) {
-      return json({ error: "A valid HTTP(S) API endpoint is required." }, { status: 400 });
+      return json({ error: "A valid HTTP(S) API endpoint is required.", isRetryable: false }, { status: 400 });
+    }
+
+    // Sanitize duplicate path segments (e.g. /chat/completions/chat/completions -> /chat/completions)
+    endpoint = endpoint.replace(/([^:])\/\/+/g, "$1/");
+    if (endpoint.includes("/chat/completions/chat/completions")) {
+      endpoint = endpoint.replace("/chat/completions/chat/completions", "/chat/completions");
     }
 
     const headers: Record<string, string> = {
@@ -55,24 +61,60 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 90000); // 90 second timeout for heavy vision reasoning models
+    // Execute downstream call with adaptive 110s timeout and single fast transient retry
+    const maxAttempts = 2;
+    let lastError: Error | null = null;
+    let downstreamRes: Response | null = null;
 
-    const downstreamRes = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload.body || {}),
-      signal: controller.signal
-    }).catch((err) => {
-      clearTimeout(timeout);
-      const isAbort = err.name === "AbortError" || err.message?.includes("aborted");
-      const msg = isAbort
-        ? "Downstream model took longer than 90 seconds to respond and timed out."
-        : `Failed to connect to model endpoint: ${err.message}`;
-      throw new Error(msg);
-    });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 110000); // 110s extended ceiling for vision models
 
-    clearTimeout(timeout);
+      try {
+        downstreamRes = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload.body || {}),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        // If transient 502/503/504 and first attempt, retry once after short backoff
+        if (attempt === 1 && [502, 503, 504].includes(downstreamRes.status)) {
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+
+        break;
+      } catch (fetchErr: unknown) {
+        clearTimeout(timeout);
+        const isAbort = (fetchErr as any)?.name === "AbortError" || String(fetchErr).includes("aborted");
+        const msg = isAbort
+          ? "Downstream model took longer than 110 seconds to respond and timed out."
+          : `Failed to connect to model endpoint: ${(fetchErr as Error)?.message || fetchErr}`;
+        lastError = new Error(msg);
+
+        if (attempt === 1 && !isAbort) {
+          // Fast retry once on connection glitch
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (!downstreamRes) {
+      const isTimeout = lastError?.message?.includes("timed out");
+      return json(
+        {
+          error: lastError?.message || "Downstream connection failed",
+          isRetryable: true,
+          status: isTimeout ? 504 : 500
+        },
+        { status: isTimeout ? 504 : 500 }
+      );
+    }
 
     const data = await downstreamRes.json().catch(() => ({}));
 
@@ -81,12 +123,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         typeof data.error === "string"
           ? data.error
           : data.error?.message || data.message || `Upstream API returned HTTP ${downstreamRes.status}`;
-      return json({ error: errText }, { status: downstreamRes.status });
+
+      const isRetryable = [429, 500, 502, 503, 504].includes(downstreamRes.status);
+
+      return json(
+        {
+          error: errText,
+          status: downstreamRes.status,
+          isRetryable,
+          upstreamData: typeof data === "object" ? data : undefined
+        },
+        { status: downstreamRes.status }
+      );
     }
 
     return json(data, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Proxy request failed";
-    return json({ error: message }, { status: 500 });
+    return json({ error: message, isRetryable: true, status: 500 }, { status: 500 });
   }
 };

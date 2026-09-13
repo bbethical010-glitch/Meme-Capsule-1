@@ -49,6 +49,45 @@ export const extractJsonFromText = (text: string): any => {
   }
 };
 
+// Session caches for model capabilities to avoid repeated 501/400 failures and redundant round-trips
+const unsupportedJsonModeModels = new Set<string>();
+const unsupportedSystemRoleModels = new Set<string>();
+
+const getModelCacheKey = (config: AiJudgeConfig): string =>
+  `${config.provider}:${config.model}`.toLowerCase();
+
+/**
+ * Robustly normalizes API base URLs and endpoints across diverse AI providers,
+ * preventing duplicate /chat/completions/chat/completions or missing /v1 paths (HTTP 404).
+ */
+export const resolveChatEndpoint = (baseUrl: string): string => {
+  let url = (baseUrl || "").trim();
+  if (!url) return "";
+
+  // Normalize duplicate slashes except after http(s):
+  url = url.replace(/([^:])\/\/+/g, "$1/");
+
+  // If already a full chat completions endpoint
+  if (url.endsWith("/chat/completions")) {
+    return url;
+  }
+  if (url.endsWith("/chat")) {
+    return `${url}/completions`;
+  }
+
+  // Handle provider base URL shorthand patterns
+  const lower = url.toLowerCase();
+  if (lower.includes("integrate.api.nvidia.com") && !lower.includes("/v1")) {
+    url = `${url.replace(/\/+$/, "")}/v1`;
+  } else if (lower.includes("openrouter.ai") && !lower.includes("/api/v1")) {
+    url = lower.includes("/api") ? `${url.replace(/\/+$/, "")}/v1` : `${url.replace(/\/+$/, "")}/api/v1`;
+  } else if (lower.includes("api.groq.com") && !lower.includes("/openai/v1")) {
+    url = lower.includes("/openai") ? `${url.replace(/\/+$/, "")}/v1` : `${url.replace(/\/+$/, "")}/openai/v1`;
+  }
+
+  return `${url.replace(/\/+$/, "")}/chat/completions`;
+};
+
 /**
  * Execute a completion call either directly or via the Cloudflare CORS proxy.
  */
@@ -56,8 +95,7 @@ export const postCompletion = async (
   config: AiJudgeConfig,
   body: Record<string, unknown>
 ): Promise<any> => {
-  const normalizedBase = config.baseUrl.replace(/\/+$/, "");
-  const endpoint = `${normalizedBase}/chat/completions`;
+  const endpoint = resolveChatEndpoint(config.baseUrl);
 
   if (config.useProxy) {
     const token = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("curator_token") : null;
@@ -153,18 +191,19 @@ export const testAiConnection = async (config: AiJudgeConfig): Promise<{ success
 };
 
 /**
- * Universal Vision Model Analysis with Adaptive Fallback:
- * 1. Tries standard structured output mode.
- * 2. If rejected due to response_format or system message restrictions,
- *    automatically retries with adaptive fallback without response_format
- *    and with merged prompt.
- * 3. Uses outermost JSON extraction to reliably parse conversational model outputs.
+ * Universal Vision Model Analysis with Adaptive Fallback & Memory:
+ * 1. Automatically checks feature memory to bypass doomed response_format calls (preventing 501/400 errors).
+ * 2. Tries standard structured output mode if supported.
+ * 3. If rejected due to 501, 400, response_format, or system message restrictions,
+ *    remembers this capability and seamlessly falls back to universal adaptive payload.
+ * 4. Uses outermost JSON extraction to reliably parse conversational model outputs.
  */
 export const analyzeMemeWithAi = async (
   meme: CurateMemeItem,
   config: AiJudgeConfig
 ): Promise<AiJudgeDecision> => {
   const startTime = Date.now();
+  const cacheKey = getModelCacheKey(config);
 
   const isReasoningModel =
     config.model.toLowerCase().includes("muse") ||
@@ -173,9 +212,45 @@ export const analyzeMemeWithAi = async (
     config.model.toLowerCase().includes("reasoning") ||
     config.model.toLowerCase().includes("think");
 
-  const standardPayload: Record<string, unknown> = {
-    model: config.model,
-    messages: [
+  // Models that don't support response_format or already failed with 501/400 in this session
+  const jsonModeDisabled = isReasoningModel || unsupportedJsonModeModels.has(cacheKey);
+  const systemRoleDisabled = unsupportedSystemRoleModels.has(cacheKey);
+
+  // Vision image detail payload optimization (low detail drastically cuts token latency)
+  const imagePayload: Record<string, unknown> = {
+    url: meme.image_url
+  };
+  if (
+    config.provider === "openrouter" ||
+    config.provider === "gemini" ||
+    config.baseUrl.toLowerCase().includes("openrouter") ||
+    config.baseUrl.toLowerCase().includes("openai")
+  ) {
+    imagePayload["detail"] = "low";
+  }
+
+  const tokenLimit = isReasoningModel ? 500 : 380;
+
+  const buildMessages = (useUnifiedPrompt: boolean) => {
+    if (useUnifiedPrompt || systemRoleDisabled) {
+      return [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: buildUnifiedAiJudgePrompt(meme.title, meme.id, config.customInstructions)
+            },
+            {
+              type: "image_url",
+              image_url: imagePayload
+            }
+          ]
+        }
+      ];
+    }
+
+    return [
       {
         role: "system",
         content: buildAiJudgeSystemPrompt(config.customInstructions)
@@ -189,84 +264,62 @@ export const analyzeMemeWithAi = async (
           },
           {
             type: "image_url",
-            image_url: {
-              url: meme.image_url
-            }
+            image_url: imagePayload
           }
         ]
       }
-    ],
-    temperature: 0.1,
-    max_tokens: 500
+    ];
   };
 
-  // Only enable response_format on non-reasoning models to avoid token rejection loops
-  if (!isReasoningModel) {
+  const standardPayload: Record<string, unknown> = {
+    model: config.model,
+    messages: buildMessages(false),
+    temperature: 0.1,
+    max_tokens: tokenLimit
+  };
+
+  if (!jsonModeDisabled) {
     standardPayload["response_format"] = { type: "json_object" };
   }
 
   let data: any;
   try {
-    // Attempt 1: Fast inference request
+    // Attempt 1: Fast inference request (direct or memory-adapted)
     data = await postCompletion(config, standardPayload);
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message.toLowerCase() : "";
+    const errMsg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
 
-    // Check if error is related to response_format, unsupported parameters, or system roles
-    const isFormatError =
+    // Check if error is related to response_format, unsupported parameters, 501 Not Implemented, or 400/422 Bad Request
+    const isFormatOr501Error =
+      errMsg.includes("501") ||
+      errMsg.includes("not implemented") ||
       errMsg.includes("response_format") ||
       errMsg.includes("json_object") ||
       errMsg.includes("schema") ||
       errMsg.includes("unexpected") ||
       errMsg.includes("extra inputs") ||
-      errMsg.includes("not supported");
+      errMsg.includes("not supported") ||
+      errMsg.includes("400") ||
+      errMsg.includes("422") ||
+      errMsg.includes("bad request");
+
     const isSystemError = errMsg.includes("system") || errMsg.includes("role");
 
-    if (isFormatError || isSystemError) {
-      // Attempt 2: Universal Adaptive Fallback (No response_format, merged prompt if needed)
+    if (isFormatOr501Error || isSystemError) {
+      // Remember capability failure to avoid repeating failed round trips in future memes
+      if (isFormatOr501Error) {
+        unsupportedJsonModeModels.add(cacheKey);
+      }
+      if (isSystemError) {
+        unsupportedSystemRoleModels.add(cacheKey);
+      }
+
+      // Attempt 2: Universal Adaptive Fallback without response_format and unified prompt if needed
       const fallbackPayload: Record<string, unknown> = {
         model: config.model,
-        messages: isSystemError
-          ? [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: buildUnifiedAiJudgePrompt(meme.title, meme.id, config.customInstructions)
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: meme.image_url
-                    }
-                  }
-                ]
-              }
-            ]
-          : [
-              {
-                role: "system",
-                content: buildAiJudgeSystemPrompt(config.customInstructions)
-              },
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: buildAiJudgeUserPrompt(meme.title, meme.id)
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: meme.image_url
-                    }
-                  }
-                ]
-              }
-            ],
+        messages: buildMessages(true),
         temperature: 0.1,
-        max_tokens: 800
+        max_tokens: isReasoningModel ? 600 : 450
       };
 
       data = await postCompletion(config, fallbackPayload);

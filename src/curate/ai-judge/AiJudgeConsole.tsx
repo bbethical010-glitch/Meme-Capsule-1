@@ -20,6 +20,8 @@ interface AiJudgeConsoleProps {
   lastDecision: AiJudgeDecision | null;
   errorMessage: string | null;
   batchProcessed: number;
+  recoveredCount?: number;
+  skippedCount?: number;
   onStart: () => void;
   onStop: () => void;
 }
@@ -35,6 +37,8 @@ export default function AiJudgeConsole({
   lastDecision,
   errorMessage,
   batchProcessed,
+  recoveredCount = 0,
+  skippedCount = 0,
   onStart,
   onStop
 }: AiJudgeConsoleProps) {
@@ -275,6 +279,8 @@ export default function AiJudgeConsole({
               backgroundColor:
                 loopState === "analyzing"
                   ? "rgba(244, 195, 0, 0.2)"
+                  : loopState === "retrying"
+                  ? "rgba(255, 149, 0, 0.25)"
                   : loopState === "previewing"
                   ? "rgba(52, 199, 89, 0.2)"
                   : loopState === "error"
@@ -283,6 +289,8 @@ export default function AiJudgeConsole({
               color:
                 loopState === "analyzing"
                   ? "#f4c300"
+                  : loopState === "retrying"
+                  ? "#FF9500"
                   : loopState === "previewing"
                   ? "#34C759"
                   : loopState === "error"
@@ -291,6 +299,8 @@ export default function AiJudgeConsole({
               border: `1px solid ${
                 loopState === "analyzing"
                   ? "#f4c300"
+                  : loopState === "retrying"
+                  ? "#FF9500"
                   : loopState === "previewing"
                   ? "#34C759"
                   : loopState === "error"
@@ -317,8 +327,8 @@ export default function AiJudgeConsole({
           </span>
         </div>
 
-        {/* Center: Live Status & Batch Count */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        {/* Center: Live Status, Batch Count & Recovery Counters */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "12px", fontFamily: "Oswald, sans-serif", color: "#ddd" }}>
             {statusMessage}
           </span>
@@ -336,6 +346,38 @@ export default function AiJudgeConsole({
               {config.batchMode === "count"
                 ? `${batchProcessed} / ${config.batchCount} EVALUATED`
                 : `${batchProcessed} EVALUATED (ENDLESS)`}
+            </span>
+          )}
+          {recoveredCount > 0 && (
+            <span
+              style={{
+                fontSize: "10px",
+                fontFamily: "monospace",
+                color: "#34C759",
+                background: "rgba(52, 199, 89, 0.15)",
+                padding: "2px 6px",
+                border: "1px solid #34C759",
+                fontWeight: 700
+              }}
+              title="Temporary errors successfully recovered automatically"
+            >
+              ✓ {recoveredCount} AUTO-RECOVERED
+            </span>
+          )}
+          {skippedCount > 0 && (
+            <span
+              style={{
+                fontSize: "10px",
+                fontFamily: "monospace",
+                color: "#FF9500",
+                background: "rgba(255, 149, 0, 0.15)",
+                padding: "2px 6px",
+                border: "1px solid #FF9500",
+                fontWeight: 700
+              }}
+              title="Memes deferred to review_later after exhausted retries"
+            >
+              ⚠️ {skippedCount} SKIPPED
             </span>
           )}
         </div>
@@ -903,24 +945,51 @@ export default function AiJudgeConsole({
               )}
             </div>
 
-            {/* Preview Delay */}
+            {/* Preview Delay Speed Control */}
             <div>
-              <label style={{ display: "block", fontFamily: "Oswald", fontSize: "11px", color: "#aaa", marginBottom: "4px" }}>
-                LIVE PREVIEW PAUSE: {config.previewDelayMs}ms
-              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label style={{ fontFamily: "Oswald", fontSize: "11px", color: "#aaa" }}>
+                  PREVIEW PAUSE: {config.previewDelayMs}ms {config.previewDelayMs === 0 ? "(INSTANT)" : ""}
+                </label>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  {[
+                    { label: "⚡ 0ms Instant", val: 0 },
+                    { label: "500ms", val: 500 },
+                    { label: "1000ms", val: 1000 },
+                    { label: "1500ms", val: 1500 }
+                  ].map((s) => (
+                    <button
+                      key={s.val}
+                      type="button"
+                      onClick={() => updateConfigField("previewDelayMs", s.val)}
+                      style={{
+                        padding: "1px 6px",
+                        fontSize: "10px",
+                        background: config.previewDelayMs === s.val ? "#34C759" : "#222",
+                        color: config.previewDelayMs === s.val ? "#111" : "#aaa",
+                        border: "1px solid #444",
+                        cursor: "pointer",
+                        fontWeight: config.previewDelayMs === s.val ? 700 : 400
+                      }}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <input
                 type="range"
-                min="500"
-                max="5000"
+                min="0"
+                max="3000"
                 step="250"
                 value={config.previewDelayMs}
                 onChange={(e) => updateConfigField("previewDelayMs", Number(e.target.value))}
                 style={{ width: "100%", cursor: "pointer" }}
               />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#666" }}>
-                <span>Fast (500ms)</span>
-                <span>Normal (1500ms)</span>
-                <span>Slow (5000ms)</span>
+                <span>0ms (Maximum Speed)</span>
+                <span>1000ms (Balanced)</span>
+                <span>3000ms (Relaxed)</span>
               </div>
             </div>
 
@@ -992,6 +1061,26 @@ export default function AiJudgeConsole({
               QUICK INSTRUCTION PRESETS:
             </div>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() =>
+                  updateConfigField(
+                    "customInstructions",
+                    "STRICT WATERMARK EXCLUSION: Automatically exclude any meme containing aggregator, repost, or creator watermarks/handles (@page_name, 9GAG, iFunny, TikTok). DISTINCTIVE CURATION: Curate for cultural depth, absurdity, satire, and fresh comedic punch. Reject generic repost filler."
+                  )
+                }
+                style={{
+                  padding: "2px 8px",
+                  fontSize: "11px",
+                  background: "#222",
+                  color: "#FF3B30",
+                  border: "1px solid #FF3B30",
+                  cursor: "pointer",
+                  fontWeight: 700
+                }}
+              >
+                🚫 Exclude Watermarks & Distinctive
+              </button>
               <button
                 type="button"
                 onClick={() => updateConfigField("customInstructions", "Be strict. Mark ambiguous or low-quality images as review_later. Only keep high-effort, genuine memes.")}
@@ -1144,6 +1233,23 @@ export default function AiJudgeConsole({
           }}
         >
           <span style={{ color: "#f4c300", fontWeight: 700 }}>AI RATIONALE:</span>
+          {lastDecision.corpus_status === "excluded" &&
+            lastDecision.curator_note?.toLowerCase().includes("watermark") && (
+              <span
+                style={{
+                  background: "#FF3B30",
+                  color: "#ffffff",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  padding: "2px 6px",
+                  borderRadius: "2px",
+                  fontFamily: "Oswald",
+                  letterSpacing: "0.5px"
+                }}
+              >
+                🚫 WATERMARK EXCLUDED
+              </span>
+            )}
           <span style={{ color: "#cdc3d0", fontStyle: "italic" }}>
             "{lastDecision.curator_note}"
           </span>

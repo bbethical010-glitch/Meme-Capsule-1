@@ -140,6 +140,7 @@ export interface AiJudgeDecision {
 export type AiJudgeLoopState =
   | "idle"
   | "analyzing"
+  | "retrying"
   | "previewing"
   | "saving"
   | "paused"

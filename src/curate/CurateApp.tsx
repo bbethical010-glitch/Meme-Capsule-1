@@ -566,6 +566,8 @@ export default function CurateApp() {
           lastDecision={aiLoop.lastDecision}
           errorMessage={aiLoop.errorMessage}
           batchProcessed={aiLoop.batchProcessed}
+          recoveredCount={aiLoop.recoveredCount}
+          skippedCount={aiLoop.skippedCount}
           onStart={aiLoop.start}
           onStop={aiLoop.stop}
         />
