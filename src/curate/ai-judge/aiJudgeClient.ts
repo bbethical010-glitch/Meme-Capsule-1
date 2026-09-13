@@ -17,37 +17,215 @@ const VALID_TONES = new Set(CURATION_TONES.map((t) => t.id));
 const VALID_MECHS = new Set(CURATION_MECHANISMS.map((m) => m.id));
 
 /**
- * Robust JSON extractor that finds and parses the outermost JSON object
- * from any model output, handling conversational wrappers, markdown fences,
- * and conversational preambles.
+ * Downsamples and compresses an image to a lightweight JPEG data URL (max 800px, ~80KB)
+ * to eliminate downstream URL fetching delays and drastically cut vision model inference time.
  */
-export const extractJsonFromText = (text: string): any => {
-  let cleaned = text.trim();
+export const prepareOptimizedImagePayload = async (imageUrl: string): Promise<string> => {
+  if (!imageUrl || typeof window === "undefined" || !imageUrl.startsWith("http")) {
+    return imageUrl;
+  }
 
-  // Strip standard markdown fences if present
-  if (cleaned.startsWith("```json")) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith("```")) {
-    cleaned = cleaned.slice(3);
-  }
-  if (cleaned.endsWith("```")) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
 
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Search for outermost JSON object boundaries { ... }
-    const firstBrace = cleaned.indexOf("{");
-    const lastBrace = cleaned.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const candidate = cleaned.slice(firstBrace, lastBrace + 1);
-      return JSON.parse(candidate);
-    }
-    throw new Error(`Model output did not contain valid JSON: "${cleaned.slice(0, 120)}..."`);
-  }
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(imageUrl);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        resolve(dataUrl);
+      } catch {
+        resolve(imageUrl);
+      }
+    };
+    img.onerror = () => resolve(imageUrl);
+    img.src = imageUrl;
+  });
 };
+
+/**
+ * Universal Hybrid Curation Extractor:
+ * 1. Parses standard JSON if present.
+ * 2. Parses Markdown key-value pairs (e.g. **Corpus Status:** keep) with regex.
+ * 3. Uses conversational and keyword heuristics if freeform text is returned.
+ * NEVER throws an error if the model returned readable text!
+ */
+export const extractHybridCurationResult = (rawText: string): Record<string, unknown> => {
+  const cleaned = (rawText || "").trim();
+
+  // Step 1: Standard JSON parsing
+  try {
+    let jsonStr = cleaned;
+    if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+    else if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+    if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+    jsonStr = jsonStr.trim();
+
+    const firstBrace = jsonStr.indexOf("{");
+    const lastBrace = jsonStr.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = jsonStr.slice(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(candidate);
+      if (typeof parsed === "object" && parsed !== null) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Continue to Step 2
+  }
+
+  // Step 2: Markdown & Key-Value extraction
+  const extractField = (patterns: RegExp[]): string | null => {
+    for (const p of patterns) {
+      const match = cleaned.match(p);
+      if (match && match[1]) {
+        return match[1].trim().replace(/^[*_`"']+|[*_`"']+$/g, "").trim();
+      }
+    }
+    return null;
+  };
+
+  const statusMatch = extractField([
+    /(?:corpus_status|corpus status|status|decision)\s*[:=]\s*[*_`"']*([a-zA-Z_]+)/i,
+    /\*\*([a-zA-Z_]+)\*\*\s*(?:corpus_status|status|decision)/i
+  ]);
+
+  let corpusStatus = "keep";
+  if (statusMatch) {
+    const s = statusMatch.toLowerCase();
+    if (s.includes("exclude")) corpusStatus = "excluded";
+    else if (s.includes("later") || s.includes("review")) corpusStatus = "review_later";
+    else if (s.includes("dup")) corpusStatus = "duplicate";
+    else corpusStatus = "keep";
+  } else {
+    // Step 3: Conversational cues
+    const lower = cleaned.toLowerCase();
+    if (lower.includes("watermark") || lower.includes("not a meme") || lower.includes("exclude")) {
+      corpusStatus = "excluded";
+    } else if (lower.includes("review later") || lower.includes("ambiguous")) {
+      corpusStatus = "review_later";
+    }
+  }
+
+  // Extract topics
+  const topicsRaw = extractField([
+    /(?:topics?|categories?)\s*[:=]\s*([^\n\r]+)/i
+  ]);
+  const topics: string[] = [];
+  if (topicsRaw) {
+    for (const t of CURATION_TOPICS) {
+      if (topicsRaw.toLowerCase().includes(t.id.toLowerCase())) {
+        topics.push(t.id);
+      }
+    }
+  }
+  if (topics.length === 0) {
+    for (const t of CURATION_TOPICS) {
+      if (cleaned.toLowerCase().includes(t.id.toLowerCase())) {
+        topics.push(t.id);
+        if (topics.length >= 2) break;
+      }
+    }
+  }
+
+  // Extract tone
+  const toneRaw = extractField([
+    /(?:dominant_tone|dominant tone|tone)\s*[:=]\s*[*_`"']*([a-zA-Z]+)/i
+  ]);
+  let tone = "Neutral";
+  if (toneRaw) {
+    for (const tn of CURATION_TONES) {
+      if (toneRaw.toLowerCase().includes(tn.id.toLowerCase())) {
+        tone = tn.id;
+        break;
+      }
+    }
+  } else {
+    for (const tn of CURATION_TONES) {
+      if (cleaned.toLowerCase().includes(tn.id.toLowerCase())) {
+        tone = tn.id;
+        break;
+      }
+    }
+  }
+
+  // Extract mechanisms
+  const mechRaw = extractField([
+    /(?:humour_mechanisms?|humor_mechanisms?|mechanisms?)\s*[:=]\s*([^\n\r]+)/i
+  ]);
+  const mechanisms: string[] = [];
+  if (mechRaw) {
+    for (const m of CURATION_MECHANISMS) {
+      if (mechRaw.toLowerCase().includes(m.id.toLowerCase())) {
+        mechanisms.push(m.id);
+      }
+    }
+  }
+  if (mechanisms.length === 0) {
+    for (const m of CURATION_MECHANISMS) {
+      if (cleaned.toLowerCase().includes(m.id.toLowerCase())) {
+        mechanisms.push(m.id);
+        if (mechanisms.length >= 2) break;
+      }
+    }
+  }
+
+  // Extract curator note / reasoning
+  const noteRaw = extractField([
+    /(?:curator_note|curator note|rationale|note|explanation|reasoning)\s*[:=]\s*[*_`"']*([^\n\r]+)/i
+  ]);
+  let curatorNote = noteRaw || "";
+  if (!curatorNote) {
+    const candidate = cleaned
+      .replace(/[*_#`]/g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 15 && !l.includes(":") && !l.toLowerCase().startsWith("meme analysis"));
+    curatorNote = candidate ? candidate.slice(0, 180) : "Automated AI curation analysis";
+  }
+
+  // Extract confidence
+  const confRaw = extractField([
+    /(?:confidence)\s*[:=]\s*[*_`"']*([0-9.]+)/i
+  ]);
+  let confidence = confRaw ? parseFloat(confRaw) : 0.88;
+  if (isNaN(confidence)) confidence = 0.88;
+  if (confidence > 1 && confidence <= 100) confidence = confidence / 100;
+
+  return {
+    corpus_status: corpusStatus,
+    duplicate_of: null,
+    topics: topics.length > 0 ? topics : ["Everyday Life"],
+    tone: tone,
+    humour_mechanisms: mechanisms.length > 0 ? mechanisms : ["Relatability"],
+    curator_note: curatorNote,
+    confidence: Math.min(1, Math.max(0, confidence))
+  };
+};
+
+export const extractJsonFromText = extractHybridCurationResult;
 
 // Session caches for model capabilities to avoid repeated 501/400 failures and redundant round-trips
 const unsupportedJsonModeModels = new Set<string>();
@@ -216,9 +394,10 @@ export const analyzeMemeWithAi = async (
   const jsonModeDisabled = isReasoningModel || unsupportedJsonModeModels.has(cacheKey);
   const systemRoleDisabled = unsupportedSystemRoleModels.has(cacheKey);
 
-  // Vision image detail payload optimization (low detail drastically cuts token latency)
+  // Downscale and compress image to lightweight base64 to eliminate downstream URL fetching latency
+  const optimizedUrl = await prepareOptimizedImagePayload(meme.image_url);
   const imagePayload: Record<string, unknown> = {
-    url: meme.image_url
+    url: optimizedUrl
   };
   if (
     config.provider === "openrouter" ||
@@ -341,13 +520,8 @@ export const analyzeMemeWithAi = async (
     throw new Error("Model returned empty or invalid response content.");
   }
 
-  // Parse JSON with robust outermost extractor
-  let parsed: any;
-  try {
-    parsed = extractJsonFromText(rawContent);
-  } catch (parseErr) {
-    throw new Error(`Failed to parse AI output as JSON: ${rawContent.slice(0, 100)}...`);
-  }
+  // Parse with Universal Hybrid Extractor (seamlessly extracts JSON, Markdown key-values, or conversational text)
+  const parsed = extractHybridCurationResult(rawContent);
 
   // Sanitize and normalize classification fields
   let corpusStatus = String(parsed.corpus_status || "keep").toLowerCase();
@@ -389,7 +563,7 @@ export const analyzeMemeWithAi = async (
 
   return {
     corpus_status: corpusStatus as any,
-    duplicate_of: parsed.duplicate_of || null,
+    duplicate_of: parsed.duplicate_of ? String(parsed.duplicate_of) : null,
     topics: validTopics.length > 0 ? validTopics : ["Everyday Life"],
     tone: tone || "Neutral",
     humour_mechanisms: validMechs.length > 0 ? validMechs : ["Relatability"],

@@ -90,12 +90,12 @@ export function useAiJudgeLoop({
     setErrorMessage(null);
     setPreviewProgress(0);
 
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 2;
     let attempt = 0;
     let decision: AiJudgeDecision | null = null;
     let lastError: unknown = null;
 
-    // Retry loop with exponential backoff & jitter for recoverable errors
+    // Fast retry loop with jitter for transient recoverable errors
     while (attempt < MAX_RETRIES && isRunningRef.current) {
       attempt += 1;
       try {
@@ -129,7 +129,7 @@ export function useAiJudgeLoop({
         // Recoverable failures: 429, 500, 502, 503, 504, timeout, network disconnect
         if (attempt < MAX_RETRIES && isRunningRef.current) {
           setLoopState("retrying");
-          const backoffMs = Math.min(6000, 1200 * Math.pow(2, attempt - 1) + Math.random() * 400);
+          const backoffMs = Math.min(3000, 1000 * attempt + Math.random() * 300);
           setStatusMessage(
             `🔄 Temporary glitch on ${meme.id} (${errText.slice(0, 45)}). Retrying ${attempt}/${MAX_RETRIES} in ${(backoffMs / 1000).toFixed(1)}s...`
           );

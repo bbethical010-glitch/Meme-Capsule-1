@@ -78,25 +78,23 @@ Because source images originate across web scrapes, you MUST automatically exclu
    - Float between 0.0 and 1.0 representing classification confidence.
 
 ---
-### 4. OUTPUT FORMAT (JSON ONLY):
-Return ONLY a valid JSON object. No markdown fences, no preamble, no conversational wrap-up:
+### 4. OUTPUT FORMAT:
+Respond with a JSON object or clean key-value block. Keep internal monologue minimal:
 {
   "corpus_status": "keep" | "excluded" | "duplicate" | "review_later",
   "duplicate_of": null,
-  "topics": ["string"],
-  "tone": "string",
-  "humour_mechanisms": ["string"],
-  "curator_note": "string",
+  "topics": ["Everyday Life"],
+  "tone": "Neutral",
+  "humour_mechanisms": ["Relatability"],
+  "curator_note": "A concise witty sentence explaining the humor or why it was excluded.",
   "confidence": 0.95
 }`;
 };
 
 export const buildAiJudgeUserPrompt = (memeTitle?: string, memeId?: string): string => {
-  return `Analyze this specific meme image independently.
-${memeTitle ? `Title / Context: "${memeTitle}"` : ""}
-${memeId ? `Meme ID: ${memeId}` : ""}
-
-Evaluate the visual composition, comedic intent, and cultural context. Check carefully for provider/repost watermarks. Output only the final JSON object.`;
+  return `Evaluate this meme image. Check for external provider/repost watermarks. Output the structured verdict:
+${memeTitle ? `Title: "${memeTitle}"` : ""}
+${memeId ? `ID: ${memeId}` : ""}`;
 };
 
 /**
@@ -107,8 +105,8 @@ export const buildUnifiedAiJudgePrompt = (memeTitle?: string, memeId?: string, c
 
 ---
 IMAGE TO EVALUATE:
-${memeTitle ? `Title / Context: "${memeTitle}"` : ""}
-${memeId ? `Meme ID: ${memeId}` : ""}
+${memeTitle ? `Title: "${memeTitle}"` : ""}
+${memeId ? `ID: ${memeId}` : ""}
 
-Analyze this image now and return the JSON object:`;
+Return the evaluation now:`;
 };
