@@ -236,7 +236,8 @@ const getModelCacheKey = (config: AiJudgeConfig): string =>
 
 /**
  * Robustly normalizes API base URLs and endpoints across diverse AI providers,
- * preventing duplicate /chat/completions/chat/completions or missing /v1 paths (HTTP 404).
+ * preventing duplicate /chat/completions/chat/completions, wrong API versions (e.g. /v11),
+ * or missing OpenAI-compatible compatibility paths (HTTP 404).
  */
 export const resolveChatEndpoint = (baseUrl: string): string => {
   let url = (baseUrl || "").trim();
@@ -244,6 +245,18 @@ export const resolveChatEndpoint = (baseUrl: string): string => {
 
   // Normalize duplicate slashes except after http(s):
   url = url.replace(/([^:])\/\/+/g, "$1/");
+
+  const lower = url.toLowerCase();
+
+  // Google AI Studio OpenAI-compatible endpoint
+  if (lower.includes("generativelanguage.googleapis.com")) {
+    return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  }
+
+  // Groq Cloud OpenAI-compatible endpoint
+  if (lower.includes("groq.com")) {
+    return "https://api.groq.com/openai/v1/chat/completions";
+  }
 
   // If already a full chat completions endpoint
   if (url.endsWith("/chat/completions")) {
@@ -254,13 +267,10 @@ export const resolveChatEndpoint = (baseUrl: string): string => {
   }
 
   // Handle provider base URL shorthand patterns
-  const lower = url.toLowerCase();
   if (lower.includes("integrate.api.nvidia.com") && !lower.includes("/v1")) {
     url = `${url.replace(/\/+$/, "")}/v1`;
   } else if (lower.includes("openrouter.ai") && !lower.includes("/api/v1")) {
     url = lower.includes("/api") ? `${url.replace(/\/+$/, "")}/v1` : `${url.replace(/\/+$/, "")}/api/v1`;
-  } else if (lower.includes("api.groq.com") && !lower.includes("/openai/v1")) {
-    url = lower.includes("/openai") ? `${url.replace(/\/+$/, "")}/v1` : `${url.replace(/\/+$/, "")}/openai/v1`;
   }
 
   return `${url.replace(/\/+$/, "")}/chat/completions`;
@@ -296,10 +306,17 @@ export const postCompletion = async (
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const errDetail =
+      let errDetail =
         typeof data.error === "string"
           ? data.error
           : data.error?.message || data.message || `Proxy failed with HTTP ${res.status}`;
+
+      if (endpoint.includes("generativelanguage.googleapis.com") && (res.status === 404 || errDetail.includes("not found"))) {
+        errDetail = `Google AI Studio error: Model "${config.model}" not found or endpoint invalid. Please use a valid model name (e.g. 'gemini-2.0-flash' or 'gemini-1.5-flash').`;
+      } else if (endpoint.includes("groq.com") && errDetail.includes("content must be a string")) {
+        errDetail = `Groq error: Model "${config.model}" does not support vision/images. Please use 'llama-3.2-11b-vision-preview' or 'llama-3.2-90b-vision-preview'.`;
+      }
+
       throw new Error(errDetail);
     }
     return data;
@@ -311,6 +328,9 @@ export const postCompletion = async (
   };
   if (config.apiKey) {
     headers["Authorization"] = `Bearer ${config.apiKey}`;
+    if (endpoint.includes("generativelanguage.googleapis.com")) {
+      headers["x-goog-api-key"] = config.apiKey;
+    }
   }
 
   const res = await fetch(endpoint, {
@@ -321,7 +341,13 @@ export const postCompletion = async (
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error?.message || data.error || `API returned HTTP ${res.status}`);
+    let errDetail = data.error?.message || data.error || `API returned HTTP ${res.status}`;
+    if (endpoint.includes("generativelanguage.googleapis.com") && (res.status === 404 || errDetail.includes("not found"))) {
+      errDetail = `Google AI Studio error: Model "${config.model}" not found. Valid models include 'gemini-2.0-flash' and 'gemini-1.5-flash'.`;
+    } else if (endpoint.includes("groq.com") && errDetail.includes("content must be a string")) {
+      errDetail = `Groq error: Model "${config.model}" does not support images. Please use 'llama-3.2-11b-vision-preview'.`;
+    }
+    throw new Error(errDetail);
   }
   return data;
 };

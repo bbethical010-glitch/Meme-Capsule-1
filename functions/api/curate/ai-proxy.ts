@@ -53,12 +53,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       endpoint = endpoint.replace("/chat/completions/chat/completions", "/chat/completions");
     }
 
+    const lowerEndpoint = endpoint.toLowerCase();
+
+    // Auto-normalize Google AI Studio endpoint
+    if (lowerEndpoint.includes("generativelanguage.googleapis.com")) {
+      endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+    } else if (lowerEndpoint.includes("groq.com") && !lowerEndpoint.includes("/openai/v1/chat/completions")) {
+      endpoint = "https://api.groq.com/openai/v1/chat/completions";
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json"
     };
 
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
+      if (lowerEndpoint.includes("generativelanguage.googleapis.com")) {
+        headers["x-goog-api-key"] = apiKey;
+      }
+    }
+
+    if (lowerEndpoint.includes("openrouter.ai")) {
+      headers["HTTP-Referer"] = "https://meme-capsule-eww.pages.dev";
+      headers["X-Title"] = "Meme Capsule";
     }
 
     // Execute downstream call with adaptive 110s timeout and single fast transient retry
@@ -119,10 +136,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const data = await downstreamRes.json().catch(() => ({}));
 
     if (!downstreamRes.ok) {
-      const errText =
+      let errText =
         typeof data.error === "string"
           ? data.error
           : data.error?.message || data.message || `Upstream API returned HTTP ${downstreamRes.status}`;
+
+      if (lowerEndpoint.includes("generativelanguage.googleapis.com") && downstreamRes.status === 404) {
+        errText = `Google AI Studio error (HTTP 404): ${errText}. Please ensure you are using a valid vision model identifier (e.g. 'gemini-2.0-flash' or 'gemini-1.5-flash').`;
+      } else if (lowerEndpoint.includes("groq.com") && errText.includes("content must be a string")) {
+        errText = `Groq Cloud error (HTTP 400): Selected model does not support image inputs. Groq requires a vision model (e.g. 'llama-3.2-11b-vision-preview' or 'llama-3.2-90b-vision-preview').`;
+      }
 
       const isRetryable = [429, 500, 502, 503, 504].includes(downstreamRes.status);
 

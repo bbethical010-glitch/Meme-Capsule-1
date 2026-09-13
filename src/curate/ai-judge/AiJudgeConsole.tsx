@@ -53,6 +53,20 @@ export default function AiJudgeConsole({
   const [showSavePresetModal, setShowSavePresetModal] = useState(false);
   const [presetActionMessage, setPresetActionMessage] = useState<string | null>(null);
 
+  // Edit / Reconfigure Preset Modal State
+  const [showEditPresetModal, setShowEditPresetModal] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<JudgeAiPreset | null>(null);
+  const [editPresetName, setEditPresetName] = useState("");
+  const [editBaseUrl, setEditBaseUrl] = useState("");
+  const [editApiKey, setEditApiKey] = useState("");
+  const [editShowApiKey, setEditShowApiKey] = useState(false);
+  const [editModelsList, setEditModelsList] = useState<string[]>([]);
+
+  // Inline Add Model State
+  const [showAddModelInline, setShowAddModelInline] = useState(false);
+  const [inlineNewModelName, setInlineNewModelName] = useState("");
+  const [isSavingModel, setIsSavingModel] = useState(false);
+
   const storageKey = userId ? `meme-capsule:ai-config:${userId}` : "meme-capsule:ai-judge-config";
 
   // Fetch Judge's Isolated Presets from D1
@@ -110,12 +124,16 @@ export default function AiJudgeConsole({
     const preset = AI_PROVIDER_PRESETS.find((p) => p.id === providerId);
     if (!preset) return;
 
+    // Check if there is an existing saved preset for this provider
+    const existing = savedPresets.find((p) => p.provider === providerId);
+
     const updated: AiJudgeConfig = {
       ...config,
       provider: providerId,
-      baseUrl: preset.baseUrl,
-      model: preset.defaultModel,
-      activePresetId: null
+      baseUrl: existing ? existing.base_url : preset.baseUrl,
+      apiKey: existing ? existing.api_key : (config.provider === providerId ? config.apiKey : ""),
+      model: existing ? existing.model : preset.defaultModel,
+      activePresetId: existing ? existing.id : null
     };
     onUpdateConfig(updated);
     localStorage.setItem(storageKey, JSON.stringify(updated));
@@ -142,6 +160,111 @@ export default function AiJudgeConsole({
     setTimeout(() => setPresetActionMessage(null), 3000);
   };
 
+  const handleOpenEditPreset = (preset: JudgeAiPreset) => {
+    setEditingPreset(preset);
+    setEditPresetName(preset.preset_name);
+    setEditBaseUrl(preset.base_url);
+    setEditApiKey(preset.api_key);
+    setEditShowApiKey(false);
+    const mList = Array.isArray(preset.models) && preset.models.length > 0
+      ? [...preset.models]
+      : (preset.model ? [preset.model] : []);
+    setEditModelsList(mList);
+    setShowEditPresetModal(true);
+  };
+
+  const handleSaveEditedPreset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPreset) return;
+
+    const token = sessionStorage.getItem("curator_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch("/api/curate/ai-presets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          id: editingPreset.id,
+          preset_name: editPresetName.trim() || editingPreset.preset_name,
+          provider: editingPreset.provider,
+          base_url: editBaseUrl.trim() || editingPreset.base_url,
+          api_key: editApiKey.trim(),
+          model: editingPreset.model,
+          models: editModelsList
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update preset.");
+
+      if (data.preset) {
+        setSavedPresets((prev) => [data.preset, ...prev.filter((p) => p.id !== data.preset.id)]);
+        if (config.activePresetId === editingPreset.id || config.provider === editingPreset.provider) {
+          const updated: AiJudgeConfig = {
+            ...config,
+            baseUrl: data.preset.base_url,
+            apiKey: data.preset.api_key,
+            model: data.preset.model,
+            activePresetId: data.preset.id
+          };
+          onUpdateConfig(updated);
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        }
+        setPresetActionMessage(`Updated preset: "${data.preset.preset_name}"`);
+        setShowEditPresetModal(false);
+        setEditingPreset(null);
+        setTimeout(() => setPresetActionMessage(null), 3000);
+      }
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Error updating preset.");
+    }
+  };
+
+  const handleRemoveModelFromPreset = async (presetId: string, modelToRemove: string) => {
+    const token = sessionStorage.getItem("curator_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/curate/ai-presets?id=${encodeURIComponent(presetId)}&model=${encodeURIComponent(modelToRemove)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) throw new Error("Failed to remove model from preset.");
+
+      setSavedPresets((prev) =>
+        prev.map((p) => {
+          if (p.id !== presetId) return p;
+          const updatedModels = (p.models || []).filter((m) => m !== modelToRemove);
+          const newCurrent = p.model === modelToRemove ? (updatedModels[0] || "") : p.model;
+          return {
+            ...p,
+            models: updatedModels,
+            model: newCurrent
+          };
+        })
+      );
+
+      setEditModelsList((prev) => prev.filter((m) => m !== modelToRemove));
+
+      if (config.model === modelToRemove) {
+        const remaining = editModelsList.filter((m) => m !== modelToRemove);
+        if (remaining.length > 0) {
+          updateConfigField("model", remaining[0]);
+        }
+      }
+
+      setPresetActionMessage(`Removed model "${modelToRemove}" from preset.`);
+      setTimeout(() => setPresetActionMessage(null), 3000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Error removing model.");
+    }
+  };
+
   const handleSaveCurrentAsPreset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPresetName.trim()) return;
@@ -161,7 +284,8 @@ export default function AiJudgeConsole({
           provider: config.provider,
           base_url: config.baseUrl,
           api_key: config.apiKey,
-          model: config.model
+          model: config.model,
+          models: [config.model]
         })
       });
 
@@ -184,7 +308,7 @@ export default function AiJudgeConsole({
   };
 
   const handleDeletePreset = async (presetId: string, presetName: string) => {
-    if (!window.confirm(`Delete preset "${presetName}"?`)) return;
+    if (!window.confirm(`Delete preset "${presetName}" and all its saved models?`)) return;
 
     const token = sessionStorage.getItem("curator_token");
     if (!token) return;
@@ -218,6 +342,83 @@ export default function AiJudgeConsole({
 
   const isConfigured = Boolean(config.baseUrl && (config.apiKey || config.provider === "custom"));
   const activeTemplate = AI_PROVIDER_PRESETS.find((p) => p.id === config.provider) || AI_PROVIDER_PRESETS[0];
+
+  const activePreset =
+    savedPresets.find((p) => p.id === config.activePresetId) ||
+    savedPresets.find((p) => p.provider === config.provider && (config.baseUrl ? p.base_url.includes(config.baseUrl) || config.baseUrl.includes(p.base_url) : true)) ||
+    savedPresets.find((p) => p.provider === config.provider);
+
+  const handleAddAndSaveNewModel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const modelClean = inlineNewModelName.trim();
+    if (!modelClean) return;
+
+    setIsSavingModel(true);
+    const token = sessionStorage.getItem("curator_token");
+
+    try {
+      const targetPreset = activePreset;
+      const currentModels = targetPreset?.models || (targetPreset?.model ? [targetPreset.model] : []);
+      const updatedModels = Array.from(new Set([...currentModels, modelClean]));
+
+      if (targetPreset && token) {
+        const res = await fetch("/api/curate/ai-presets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            id: targetPreset.id,
+            preset_name: targetPreset.preset_name,
+            provider: targetPreset.provider,
+            base_url: targetPreset.base_url,
+            api_key: targetPreset.api_key,
+            model: modelClean,
+            models: updatedModels
+          })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Failed to auto-save model to preset.");
+
+        if (data.preset) {
+          setSavedPresets((prev) => [data.preset, ...prev.filter((p) => p.id !== data.preset.id)]);
+        }
+      } else if (token) {
+        const res = await fetch("/api/curate/ai-presets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            preset_name: activeTemplate.name,
+            provider: config.provider,
+            base_url: config.baseUrl,
+            api_key: config.apiKey,
+            model: modelClean,
+            models: [modelClean]
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data.preset) {
+          setSavedPresets((prev) => [data.preset, ...prev.filter((p) => p.id !== data.preset.id)]);
+          updateConfigField("activePresetId", data.preset.id);
+        }
+      }
+
+      updateConfigField("model", modelClean);
+      setPresetActionMessage(`Added and saved model "${modelClean}"!`);
+      setInlineNewModelName("");
+      setShowAddModelInline(false);
+      setTimeout(() => setPresetActionMessage(null), 3500);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Error saving model.");
+    } finally {
+      setIsSavingModel(false);
+    }
+  };
 
   return (
     <div
@@ -529,7 +730,7 @@ export default function AiJudgeConsole({
                   letterSpacing: "0.5px"
                 }}
               >
-                YOUR SAVED AI MODEL PRESETS (PRIVATE TO YOU):
+                YOUR SAVED PROVIDER PRESETS (PRIVATE TO YOU):
               </div>
               <button
                 type="button"
@@ -556,7 +757,8 @@ export default function AiJudgeConsole({
             ) : (
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 {savedPresets.map((p) => {
-                  const isActive = config.activePresetId === p.id;
+                  const isActive = config.activePresetId === p.id || (activePreset?.id === p.id);
+                  const modelCount = Array.isArray(p.models) && p.models.length > 0 ? p.models.length : (p.model ? 1 : 0);
                   return (
                     <div
                       key={p.id}
@@ -564,7 +766,8 @@ export default function AiJudgeConsole({
                         display: "flex",
                         alignItems: "center",
                         background: isActive ? "#9b30ff" : "#222",
-                        border: isActive ? "1px solid #f4c300" : "1px solid #444",
+                        border: isActive ? "2px solid #f4c300" : "1px solid #444",
+                        boxShadow: isActive ? "2px 2px 0px #f4c300" : "none",
                         padding: "4px 8px",
                         gap: "6px"
                       }}
@@ -583,7 +786,22 @@ export default function AiJudgeConsole({
                           padding: 0
                         }}
                       >
-                        {p.preset_name} ({p.model.split("/").pop()})
+                        {p.preset_name} <span style={{ opacity: 0.85, fontSize: "11px" }}>({modelCount} model{modelCount === 1 ? "" : "s"})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditPreset(p)}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: isActive ? "#f4c300" : "#aaa",
+                          fontSize: "11px",
+                          cursor: "pointer",
+                          padding: "0 2px"
+                        }}
+                        title="Edit Preset & Manage Models"
+                      >
+                        ✏️
                       </button>
                       <button
                         type="button"
@@ -596,7 +814,7 @@ export default function AiJudgeConsole({
                           cursor: "pointer",
                           padding: "0 2px"
                         }}
-                        title="Delete Preset"
+                        title="Delete Entire Provider Preset"
                       >
                         ✕
                       </button>
@@ -606,6 +824,142 @@ export default function AiJudgeConsole({
               </div>
             )}
           </div>
+
+          {/* Modal to Edit & Reconfigure Preset */}
+          {showEditPresetModal && editingPreset && (
+            <div
+              style={{
+                background: "#1e1e1e",
+                border: "2px solid #f4c300",
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                boxShadow: "4px 4px 0px black"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "#f4c300", fontFamily: "Oswald" }}>
+                  ✏️ RECONFIGURE PROVIDER PRESET: {editingPreset.preset_name.toUpperCase()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditPresetModal(false);
+                    setEditingPreset(null);
+                  }}
+                  style={{ background: "transparent", border: "none", color: "#aaa", fontSize: "14px", cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEditedPreset} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", color: "#aaa", fontFamily: "Oswald", marginBottom: "4px" }}>
+                    PRESET / PROVIDER NAME:
+                  </label>
+                  <input
+                    type="text"
+                    value={editPresetName}
+                    onChange={(e) => setEditPresetName(e.target.value)}
+                    style={{ width: "100%", padding: "6px 10px", background: "#111", border: "1px solid #555", color: "#fff", fontFamily: "Oswald", fontSize: "12px" }}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "11px", color: "#aaa", fontFamily: "Oswald", marginBottom: "4px" }}>
+                      API BASE URL:
+                    </label>
+                    <input
+                      type="text"
+                      value={editBaseUrl}
+                      onChange={(e) => setEditBaseUrl(e.target.value)}
+                      style={{ width: "100%", padding: "6px 10px", background: "#111", border: "1px solid #555", color: "#fff", fontFamily: "monospace", fontSize: "11px" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "11px", color: "#aaa", fontFamily: "Oswald", marginBottom: "4px" }}>
+                      API KEY:
+                    </label>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <input
+                        type={editShowApiKey ? "text" : "password"}
+                        value={editApiKey}
+                        onChange={(e) => setEditApiKey(e.target.value)}
+                        placeholder="Leave blank to preserve encrypted key..."
+                        style={{ flex: 1, padding: "6px 10px", background: "#111", border: "1px solid #555", color: "#fff", fontFamily: "monospace", fontSize: "11px" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditShowApiKey(!editShowApiKey)}
+                        style={{ padding: "4px 8px", background: "#222", border: "1px solid #444", color: "#aaa", fontSize: "10px", cursor: "pointer" }}
+                      >
+                        {editShowApiKey ? "HIDE" : "SHOW"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Saved Models List with Individual Remove Buttons */}
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", color: "#f4c300", fontFamily: "Oswald", marginBottom: "6px" }}>
+                    SAVED MODELS IN THIS PRESET (CLICK ✕ TO REMOVE OUTDATED OR INVALID MODELS):
+                  </label>
+                  {editModelsList.length === 0 ? (
+                    <div style={{ fontSize: "11px", color: "#777", fontStyle: "italic" }}>No models saved yet.</div>
+                  ) : (
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {editModelsList.map((m) => (
+                        <div
+                          key={m}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            background: "#262626",
+                            border: "1px solid #555",
+                            padding: "4px 8px"
+                          }}
+                        >
+                          <span style={{ color: "#fff", fontFamily: "monospace", fontSize: "11px" }}>{m}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveModelFromPreset(editingPreset.id, m)}
+                            style={{ background: "transparent", border: "none", color: "#ff5555", fontSize: "12px", cursor: "pointer", padding: "0 2px" }}
+                            title="Remove this model"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "6px" }}>
+                  <button
+                    type="submit"
+                    style={{ padding: "6px 14px", background: "#f4c300", color: "#111", border: "none", fontFamily: "Anton", fontSize: "13px", cursor: "pointer" }}
+                  >
+                    SAVE CHANGES
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditPresetModal(false);
+                      setEditingPreset(null);
+                    }}
+                    style={{ padding: "6px 12px", background: "#333", color: "#aaa", border: "none", fontFamily: "Oswald", fontSize: "12px", cursor: "pointer" }}
+                  >
+                    CANCEL
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Modal to Name and Save Preset */}
           {showSavePresetModal && (
@@ -625,7 +979,7 @@ export default function AiJudgeConsole({
               <form onSubmit={handleSaveCurrentAsPreset} style={{ display: "flex", gap: "8px" }}>
                 <input
                   type="text"
-                  placeholder="e.g. Muse Glimmer 30B, Kimi K3, NVIDIA Llama"
+                  placeholder="e.g. Google AI Studio, NVIDIA NIM, Groq Cloud"
                   value={newPresetName}
                   onChange={(e) => setNewPresetName(e.target.value)}
                   autoFocus
@@ -812,32 +1166,177 @@ export default function AiJudgeConsole({
               </div>
             </div>
 
-            {/* Model Name */}
+            {/* Model Chooser & Identifier */}
             <div>
-              <label
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label
+                  style={{
+                    fontFamily: "Oswald, sans-serif",
+                    fontSize: "11px",
+                    color: "#aaa"
+                  }}
+                >
+                  ACTIVE VISION MODEL:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModelInline(!showAddModelInline)}
+                  style={{
+                    background: showAddModelInline ? "#f4c300" : "#222",
+                    color: showAddModelInline ? "#111" : "#f4c300",
+                    border: "1px solid #f4c300",
+                    fontFamily: "Oswald",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: "1px 6px"
+                  }}
+                >
+                  {showAddModelInline ? "✕ CLOSE" : "➕ ADD NEW MODEL"}
+                </button>
+              </div>
+
+              {/* Model Chooser Dropdown */}
+              <select
+                value={config.model}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "__add_new__") {
+                    setShowAddModelInline(true);
+                  } else {
+                    updateConfigField("model", val);
+                  }
+                }}
                 style={{
-                  display: "block",
-                  fontFamily: "Oswald, sans-serif",
-                  fontSize: "11px",
-                  color: "#aaa",
-                  marginBottom: "4px"
+                  width: "100%",
+                  padding: "7px 10px",
+                  background: "#121212",
+                  border: "1px solid #555",
+                  color: "#f4c300",
+                  fontFamily: "monospace",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  outline: "none",
+                  cursor: "pointer",
+                  marginBottom: "6px"
                 }}
               >
-                MODEL IDENTIFIER (E.G. MUSE GLIMMER 30B, KIMI K3, LLAMA VISION):
-              </label>
+                {/* Saved Models in Preset */}
+                {activePreset && Array.isArray(activePreset.models) && activePreset.models.length > 0 && (
+                  <optgroup label={`★ SAVED IN ${activePreset.preset_name.toUpperCase()}`}>
+                    {activePreset.models.map((m) => (
+                      <option key={`saved-${m}`} value={m}>
+                        ★ {m}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {/* Popular Recommended Models */}
+                <optgroup label={`RECOMMENDED VISION MODELS (${activeTemplate.name.toUpperCase()})`}>
+                  {activeTemplate.recommendedModels
+                    .filter((m) => !(activePreset?.models || []).includes(m))
+                    .map((m) => (
+                      <option key={`rec-${m}`} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                </optgroup>
+
+                {/* Current Custom Model (if not already listed) */}
+                {config.model &&
+                  !(activePreset?.models || []).includes(config.model) &&
+                  !activeTemplate.recommendedModels.includes(config.model) && (
+                    <optgroup label="CURRENT CUSTOM MODEL">
+                      <option value={config.model}>{config.model}</option>
+                    </optgroup>
+                  )}
+
+                <optgroup label="ACTIONS">
+                  <option value="__add_new__">➕ Add New Model to this Provider...</option>
+                </optgroup>
+              </select>
+
+              {/* Inline Add Model Input Form */}
+              {showAddModelInline && (
+                <form
+                  onSubmit={handleAddAndSaveNewModel}
+                  style={{
+                    display: "flex",
+                    gap: "6px",
+                    marginBottom: "8px",
+                    background: "#1c1b1b",
+                    padding: "8px",
+                    border: "1px solid #f4c300"
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Enter model (e.g. gemini-2.0-flash or llama-3.2-11b-vision-preview)..."
+                    value={inlineNewModelName}
+                    onChange={(e) => setInlineNewModelName(e.target.value)}
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      padding: "5px 8px",
+                      background: "#111",
+                      border: "1px solid #555",
+                      color: "#fff",
+                      fontFamily: "monospace",
+                      fontSize: "11px",
+                      outline: "none"
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSavingModel || !inlineNewModelName.trim()}
+                    style={{
+                      padding: "5px 10px",
+                      background: "#f4c300",
+                      color: "#111",
+                      border: "none",
+                      fontFamily: "Anton",
+                      fontSize: "11px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {isSavingModel ? "SAVING..." : "ADD & AUTO-SAVE"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModelInline(false);
+                      setInlineNewModelName("");
+                    }}
+                    style={{
+                      padding: "5px 8px",
+                      background: "#333",
+                      color: "#aaa",
+                      border: "none",
+                      fontFamily: "Oswald",
+                      fontSize: "11px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    CANCEL
+                  </button>
+                </form>
+              )}
+
+              {/* Exact Model String Input */}
               <input
                 type="text"
                 value={config.model}
                 onChange={(e) => updateConfigField("model", e.target.value)}
-                placeholder="e.g. muse/glimmer-30b or meta/llama-3.2-11b-vision-instruct"
+                placeholder="e.g. gemini-2.0-flash or meta/llama-3.2-11b-vision-instruct"
                 style={{
                   width: "100%",
-                  padding: "8px 10px",
-                  background: "#121212",
-                  border: "1px solid #444",
-                  color: "#fff",
+                  padding: "6px 10px",
+                  background: "#111",
+                  border: "1px solid #333",
+                  color: "#aaa",
                   fontFamily: "monospace",
-                  fontSize: "12px",
+                  fontSize: "11px",
                   outline: "none"
                 }}
               />
