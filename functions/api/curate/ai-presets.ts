@@ -14,7 +14,7 @@
 import type { PagesFunction } from "../../_shared/pages";
 import { json, handleD1Error, type Env } from "../../_shared/d1r2";
 import { requireAuth, verifyPassword } from "../../_shared/catAuth";
-import { ensureCurationTables } from "../../_shared/curateDb";
+import { ensureCurationTables, ensureApiPasswordColumn } from "../../_shared/curateDb";
 import { encryptApiKey, decryptApiKey } from "../../_shared/crypto";
 
 interface SavePresetPayload {
@@ -70,6 +70,7 @@ const getCleanProviderName = (provider: string, existingName?: string): string =
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    await ensureApiPasswordColumn(env.DB);
     await ensureCurationTables(env.DB);
     const sessionUser = await requireAuth(request, env);
     const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
@@ -206,6 +207,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    await ensureApiPasswordColumn(env.DB);
     await ensureCurationTables(env.DB);
     const sessionUser = await requireAuth(request, env);
     const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
@@ -435,6 +437,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    await ensureApiPasswordColumn(env.DB);
     await ensureCurationTables(env.DB);
     const sessionUser = await requireAuth(request, env);
 

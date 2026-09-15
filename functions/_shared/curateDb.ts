@@ -1,12 +1,29 @@
 let tablesInitialized = false;
+let apiPasswordColumnChecked = false;
 
 // SHA-256 of "changeme123"
 const DEFAULT_PASS_HASH = "494a715f7e9b4071aca61bac42ca858a309524e5864f0920030862a4ae7589be";
 
 /**
+ * Robust self-healing column migration for api_password_hash.
+ * Runs standalone so it is never blocked by tablesInitialized or db.exec errors.
+ */
+export async function ensureApiPasswordColumn(db: D1Database): Promise<void> {
+  if (apiPasswordColumnChecked) return;
+  try {
+    await db.prepare("ALTER TABLE cat_users ADD COLUMN api_password_hash TEXT").run();
+  } catch {
+    // Ignore if column already exists
+  }
+  apiPasswordColumnChecked = true;
+}
+
+/**
  * Ensures that all necessary tables and default judge accounts exist in D1 automatically.
  */
 export async function ensureCurationTables(db: D1Database): Promise<void> {
+  await ensureApiPasswordColumn(db);
+
   if (tablesInitialized) return;
 
   try {

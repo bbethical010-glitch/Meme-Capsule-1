@@ -11,7 +11,7 @@
 import type { PagesFunction } from "../../_shared/pages";
 import { json, handleD1Error, type Env } from "../../_shared/d1r2";
 import { requireAuth, verifyPassword, hashPassword } from "../../_shared/catAuth";
-import { ensureCurationTables } from "../../_shared/curateDb";
+import { ensureCurationTables, ensureApiPasswordColumn } from "../../_shared/curateDb";
 
 interface UpdateAccountPayload {
   username?: string;
@@ -24,6 +24,7 @@ interface UpdateAccountPayload {
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    await ensureApiPasswordColumn(env.DB);
     await ensureCurationTables(env.DB);
     const sessionUser = await requireAuth(request, env);
 
@@ -65,6 +66,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    await ensureApiPasswordColumn(env.DB);
     await ensureCurationTables(env.DB);
     const sessionUser = await requireAuth(request, env);
 
@@ -189,6 +191,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
+    await ensureApiPasswordColumn(env.DB);
     await ensureCurationTables(env.DB);
     const sessionUser = await requireAuth(request, env);
 
