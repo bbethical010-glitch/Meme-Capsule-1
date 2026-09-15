@@ -111,7 +111,7 @@ export function useAiJudgeLoop({
         const errText = err instanceof Error ? err.message : String(err);
         const errLower = errText.toLowerCase();
 
-        // Non-recoverable failures (Auth errors, missing key)
+        // Non-recoverable failures (Auth errors, missing key, DB quota limits)
         const isAuthError =
           errLower.includes("401") ||
           errLower.includes("unauthorized") ||
@@ -123,6 +123,18 @@ export function useAiJudgeLoop({
           isProcessingRef.current = false;
           setErrorMessage(errText);
           stop(`Authentication error: ${errText}`);
+          return;
+        }
+
+        const isQuotaError =
+          errLower.includes("quota") ||
+          errLower.includes("limit exceeded") ||
+          errLower.includes("resource limit");
+
+        if (isQuotaError) {
+          isProcessingRef.current = false;
+          setErrorMessage("Database daily read limit reached. AI loop paused safely.");
+          stop("Paused: Cloudflare D1 daily quota limit reached. Paused safely to prevent data loss.");
           return;
         }
 
@@ -230,6 +242,13 @@ export function useAiJudgeLoop({
       nextMeme = await onAdvance(decision);
     } catch (saveErr) {
       console.error("Auto advance save error:", saveErr);
+      const saveErrText = saveErr instanceof Error ? saveErr.message : String(saveErr);
+      if (/quota|limit exceeded|resource limit/i.test(saveErrText)) {
+        isProcessingRef.current = false;
+        setErrorMessage("Database daily quota limit reached. Paused safely.");
+        stop("Paused: Cloudflare D1 daily quota limit reached.");
+        return;
+      }
     }
 
     isProcessingRef.current = false;

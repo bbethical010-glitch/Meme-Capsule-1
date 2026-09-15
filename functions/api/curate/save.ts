@@ -6,7 +6,7 @@
  */
 
 import type { PagesFunction } from "../../_shared/pages";
-import { json, type Env } from "../../_shared/d1r2";
+import { json, handleD1Error, type Env } from "../../_shared/d1r2";
 import { validateSession } from "../../_shared/catAuth";
 import { ensureCurationTables } from "../../_shared/curateDb";
 
@@ -104,8 +104,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       humour_mechanisms: mechanisms
     });
   } catch (err: unknown) {
-    if (err instanceof Response) return err;
-    const msg = err instanceof Error ? err.message : "Error saving curation decision";
-    return json({ error: msg }, { status: 500 });
+    return handleD1Error(err, "Error saving curation decision");
   }
 };

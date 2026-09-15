@@ -53,6 +53,19 @@ export const json = (body: unknown, init: ResponseInit = {}) =>
     }
   });
 
+export const handleD1Error = (err: unknown, fallbackMessage: string = "Database operation failed") => {
+  if (err instanceof Response) return err;
+  const msg = err instanceof Error ? err.message : fallbackMessage;
+  const isQuota = /quota|limit exceeded|resource limit/i.test(msg);
+  return json(
+    {
+      error: isQuota ? "Cloudflare D1 daily quota limit reached. Operations temporarily paused." : msg,
+      isQuotaExceeded: isQuota
+    },
+    { status: isQuota ? 429 : 500 }
+  );
+};
+
 export const requireAdmin = (request: Request, env: Env) => {
   if (!env.ADMIN_API_TOKEN) {
     return json({ error: "ADMIN_API_TOKEN is not configured." }, { status: 503 });

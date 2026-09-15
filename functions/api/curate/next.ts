@@ -13,9 +13,13 @@
  */
 
 import type { PagesFunction } from "../../_shared/pages";
-import { json, type Env } from "../../_shared/d1r2";
+import { json, handleD1Error, type Env } from "../../_shared/d1r2";
 import { validateSession } from "../../_shared/catAuth";
 import { ensureAIPredictionTable, ensureCurationTables } from "../../_shared/curateDb";
+
+// In-memory isolate cache for static total memes count (avoids scanning 5,000+ rows on every swipe)
+let totalMemesCache: { count: number; expiresAt: number } | null = null;
+const TOTAL_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
 
 interface MemeRow {
   id: string;
@@ -151,12 +155,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const direction = url.searchParams.get("direction") || "next";
     const publicBase = (env.R2_PUBLIC_URL || "").replace(/\/+$/, "");
 
-    // 1. Overall counts for this judge.
-    const totalCountRes = await env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM memes"
-    ).first<{ cnt: number }>();
-
-    const total = totalCountRes?.cnt ?? 0;
+    // 1. Overall counts for this judge (cached total to prevent full table scans).
+    const now = Date.now();
+    let total = 0;
+    if (totalMemesCache && totalMemesCache.expiresAt > now) {
+      total = totalMemesCache.count;
+    } else {
+      const totalCountRes = await env.DB.prepare(
+        "SELECT COUNT(*) as cnt FROM memes"
+      ).first<{ cnt: number }>();
+      total = totalCountRes?.cnt ?? 0;
+      totalMemesCache = { count: total, expiresAt: now + TOTAL_CACHE_TTL_MS };
+    }
 
     const reviewedCountRes = await env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM meme_curation WHERE user_id = ?"
@@ -274,13 +284,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       },
     });
   } catch (err: unknown) {
-    if (err instanceof Response) return err;
-
-    const msg =
-      err instanceof Error
-        ? err.message
-        : "Error fetching next curation meme";
-
-    return json({ error: msg }, { status: 500 });
+    return handleD1Error(err, "Error fetching next curation meme");
   }
 };
