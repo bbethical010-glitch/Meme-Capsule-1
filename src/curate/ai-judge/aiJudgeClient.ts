@@ -300,6 +300,7 @@ export const postCompletion = async (
       body: JSON.stringify({
         endpoint,
         apiKey: config.apiKey,
+        presetId: config.activePresetId,
         body
       })
     });

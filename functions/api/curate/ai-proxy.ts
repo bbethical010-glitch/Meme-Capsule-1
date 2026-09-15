@@ -9,10 +9,12 @@
 import type { PagesFunction } from "../../_shared/pages";
 import { json, type Env } from "../../_shared/d1r2";
 import { validateSession } from "../../_shared/catAuth";
+import { decryptApiKey } from "../../_shared/crypto";
 
 interface ProxyPayload {
   endpoint?: string;
   apiKey?: string;
+  presetId?: string;
   body?: unknown;
 }
 
@@ -41,7 +43,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     const payload = (await request.json().catch(() => ({}))) as ProxyPayload;
     let endpoint = (payload.endpoint || "").trim();
-    const apiKey = (payload.apiKey || "").trim();
+    let apiKey = (payload.apiKey || "").trim();
+
+    // If API key is masked with bullets or empty, resolve securely from preset in D1
+    if ((!apiKey || apiKey.startsWith("•••") || apiKey.startsWith("...")) && payload.presetId && sessionUser) {
+      try {
+        const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
+        const preset = await env.DB.prepare(`
+          SELECT api_key FROM cat_judge_ai_presets WHERE id = ? AND user_id = ?
+        `).bind(payload.presetId, sessionUser.id).first<{ api_key: string }>();
+
+        if (preset?.api_key) {
+          apiKey = await decryptApiKey(preset.api_key, secretSeed);
+        }
+      } catch (err) {
+        console.error("Warning: could not auto-resolve preset key in proxy:", err);
+      }
+    }
 
     if (!endpoint || !endpoint.startsWith("http")) {
       return json({ error: "A valid HTTP(S) API endpoint is required.", isRetryable: false }, { status: 400 });

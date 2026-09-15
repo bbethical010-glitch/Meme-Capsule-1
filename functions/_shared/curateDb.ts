@@ -17,6 +17,7 @@ export async function ensureCurationTables(db: D1Database): Promise<void> {
         username      TEXT NOT NULL UNIQUE,
         display_name  TEXT NOT NULL,
         password_hash TEXT NOT NULL,
+        api_password_hash TEXT,
         role          TEXT NOT NULL CHECK (role IN ('judge', 'superadmin')),
         is_active     INTEGER NOT NULL DEFAULT 1,
         created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -122,6 +123,13 @@ export async function ensureCurationTables(db: D1Database): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_ai_predictions_meme ON ai_curation_predictions(meme_id);
     `);
+
+    try {
+      await db.prepare("ALTER TABLE cat_users ADD COLUMN api_password_hash TEXT").run();
+    } catch {
+      // ignore if already exists
+    }
+
     tablesInitialized = true;
     aiTableInitialized = true;
   } catch (err) {

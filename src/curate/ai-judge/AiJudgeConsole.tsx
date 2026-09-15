@@ -53,6 +53,19 @@ export default function AiJudgeConsole({
   const [showSavePresetModal, setShowSavePresetModal] = useState(false);
   const [presetActionMessage, setPresetActionMessage] = useState<string | null>(null);
 
+  // Dedicated API Key Encryption Password Security State
+  const [hasApiPassword, setHasApiPassword] = useState<boolean>(false);
+  const [unlockedKeys, setUnlockedKeys] = useState<Record<string, string>>({});
+  const [showUnlockPasswordModal, setShowUnlockPasswordModal] = useState(false);
+  const [unlockTarget, setUnlockTarget] = useState<{
+    type: "reveal" | "edit" | "delete" | "create";
+    preset?: JudgeAiPreset;
+  } | null>(null);
+  const [unlockPasswordInput, setUnlockPasswordInput] = useState("");
+  const [unlockErrorMsg, setUnlockErrorMsg] = useState<string | null>(null);
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [verifiedPasswordSession, setVerifiedPasswordSession] = useState<string>("");
+
   // Edit / Reconfigure Preset Modal State
   const [showEditPresetModal, setShowEditPresetModal] = useState(false);
   const [editingPreset, setEditingPreset] = useState<JudgeAiPreset | null>(null);
@@ -81,6 +94,7 @@ export default function AiJudgeConsole({
       const data = await res.json().catch(() => ({}));
       if (data.presets && Array.isArray(data.presets)) {
         setSavedPresets(data.presets);
+        setHasApiPassword(Boolean(data.has_api_password));
         if (userId) {
           localStorage.setItem(`meme-capsule:ai-presets:${userId}`, JSON.stringify(data.presets));
         }
@@ -157,19 +171,147 @@ export default function AiJudgeConsole({
     localStorage.setItem(storageKey, JSON.stringify(updated));
     setPresetActionMessage(`Loaded preset: "${preset.preset_name}"`);
     setTestResult(null);
+    setShowApiKey(Boolean(unlockedKeys[preset.id]));
     setTimeout(() => setPresetActionMessage(null), 3000);
   };
 
-  const handleOpenEditPreset = (preset: JudgeAiPreset) => {
+  const handleOpenUnlockChallenge = (
+    type: "reveal" | "edit" | "delete" | "create",
+    preset?: JudgeAiPreset
+  ) => {
+    setUnlockTarget({ type, preset });
+    setUnlockPasswordInput("");
+    setUnlockErrorMsg(null);
+    setShowUnlockPasswordModal(true);
+  };
+
+  const handleVerifyUnlockPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const enteredPass = unlockPasswordInput.trim();
+    if (!enteredPass) {
+      setUnlockErrorMsg("Please enter your API encryption password.");
+      return;
+    }
+
+    const token = sessionStorage.getItem("curator_token");
+    if (!token) {
+      setUnlockErrorMsg("Session expired. Please re-login.");
+      return;
+    }
+
+    setIsVerifyingPassword(true);
+    setUnlockErrorMsg(null);
+
+    try {
+      if (!unlockTarget) return;
+
+      if (unlockTarget.type === "reveal") {
+        const targetId = activePreset?.id;
+        if (!targetId) {
+          throw new Error("Please select a saved provider preset first.");
+        }
+
+        const res = await fetch("/api/curate/ai-presets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: "reveal-key",
+            id: targetId,
+            api_password: enteredPass
+          })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "Incorrect API encryption password.");
+        }
+
+        if (data.api_key) {
+          setUnlockedKeys((prev) => ({ ...prev, [targetId]: data.api_key }));
+          setShowApiKey(true);
+          setShowUnlockPasswordModal(false);
+          setUnlockPasswordInput("");
+          setPresetActionMessage("API key unlocked and revealed.");
+          setTimeout(() => setPresetActionMessage(null), 3000);
+        }
+      } else {
+        // Verify password against account endpoint
+        const res = await fetch("/api/curate/account", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            action: "verify-api-password",
+            api_password: enteredPass
+          })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "Incorrect API encryption password.");
+        }
+
+        setVerifiedPasswordSession(enteredPass);
+        setShowUnlockPasswordModal(false);
+        setUnlockPasswordInput("");
+
+        if (unlockTarget.type === "create") {
+          setShowSavePresetModal(true);
+        } else if (unlockTarget.type === "edit" && unlockTarget.preset) {
+          executeOpenEditPreset(unlockTarget.preset, enteredPass);
+        } else if (unlockTarget.type === "delete" && unlockTarget.preset) {
+          executeDeletePreset(unlockTarget.preset.id, unlockTarget.preset.preset_name, enteredPass);
+        }
+      }
+    } catch (err: unknown) {
+      setUnlockErrorMsg(err instanceof Error ? err.message : "Verification failed.");
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
+
+  const handleToggleShowApiKey = () => {
+    if (!hasApiPassword) {
+      setShowApiKey(!showApiKey);
+      return;
+    }
+
+    const currentKeyUnlocked = activePreset?.id ? Boolean(unlockedKeys[activePreset.id]) : false;
+
+    if (currentKeyUnlocked) {
+      // Re-lock: remove decrypted key from memory and hide
+      if (activePreset?.id) {
+        setUnlockedKeys((prev) => {
+          const next = { ...prev };
+          delete next[activePreset.id];
+          return next;
+        });
+      }
+      setShowApiKey(false);
+      setPresetActionMessage("API key hidden and locked.");
+      setTimeout(() => setPresetActionMessage(null), 3000);
+    } else {
+      handleOpenUnlockChallenge("reveal");
+    }
+  };
+
+  const executeOpenEditPreset = (preset: JudgeAiPreset, verifiedPass?: string) => {
     setEditingPreset(preset);
     setEditPresetName(preset.preset_name);
     setEditBaseUrl(preset.base_url);
-    setEditApiKey(preset.api_key);
-    setEditShowApiKey(false);
+    const existingUnlockedKey = unlockedKeys[preset.id];
+    setEditApiKey(existingUnlockedKey || "");
+    setEditShowApiKey(Boolean(existingUnlockedKey));
     const mList = Array.isArray(preset.models) && preset.models.length > 0
       ? [...preset.models]
       : (preset.model ? [preset.model] : []);
     setEditModelsList(mList);
+    setVerifiedPasswordSession(verifiedPass || "");
     setShowEditPresetModal(true);
   };
 
@@ -193,6 +335,7 @@ export default function AiJudgeConsole({
           provider: editingPreset.provider,
           base_url: editBaseUrl.trim() || editingPreset.base_url,
           api_key: editApiKey.trim(),
+          api_password: verifiedPasswordSession || undefined,
           model: editingPreset.model,
           models: editModelsList
         })
@@ -217,6 +360,7 @@ export default function AiJudgeConsole({
         setPresetActionMessage(`Updated preset: "${data.preset.preset_name}"`);
         setShowEditPresetModal(false);
         setEditingPreset(null);
+        setVerifiedPasswordSession("");
         setTimeout(() => setPresetActionMessage(null), 3000);
       }
     } catch (err: unknown) {
@@ -284,6 +428,7 @@ export default function AiJudgeConsole({
           provider: config.provider,
           base_url: config.baseUrl,
           api_key: config.apiKey,
+          api_password: verifiedPasswordSession || undefined,
           model: config.model,
           models: [config.model]
         })
@@ -300,6 +445,7 @@ export default function AiJudgeConsole({
         setPresetActionMessage(`Saved preset: "${newPresetName.trim()}"`);
         setNewPresetName("");
         setShowSavePresetModal(false);
+        setVerifiedPasswordSession("");
         setTimeout(() => setPresetActionMessage(null), 3000);
       }
     } catch (err: unknown) {
@@ -307,28 +453,35 @@ export default function AiJudgeConsole({
     }
   };
 
-  const handleDeletePreset = async (presetId: string, presetName: string) => {
+  const executeDeletePreset = async (presetId: string, presetName: string, apiPassword?: string) => {
     if (!window.confirm(`Delete preset "${presetName}" and all its saved models?`)) return;
 
     const token = sessionStorage.getItem("curator_token");
     if (!token) return;
 
     try {
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (apiPassword) {
+        headers["X-Api-Password"] = apiPassword;
+      }
       const res = await fetch(`/api/curate/ai-presets?id=${encodeURIComponent(presetId)}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
 
-      if (res.ok) {
-        setSavedPresets((prev) => prev.filter((p) => p.id !== presetId));
-        if (config.activePresetId === presetId) {
-          updateConfigField("activePresetId", null);
-        }
-        setPresetActionMessage(`Deleted preset: "${presetName}"`);
-        setTimeout(() => setPresetActionMessage(null), 3000);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete preset.");
       }
-    } catch {
-      alert("Failed to delete preset.");
+
+      setSavedPresets((prev) => prev.filter((p) => p.id !== presetId));
+      if (config.activePresetId === presetId) {
+        updateConfigField("activePresetId", null);
+      }
+      setPresetActionMessage(`Deleted preset: "${presetName}"`);
+      setTimeout(() => setPresetActionMessage(null), 3000);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to delete preset.");
     }
   };
 
@@ -347,6 +500,12 @@ export default function AiJudgeConsole({
     savedPresets.find((p) => p.id === config.activePresetId) ||
     savedPresets.find((p) => p.provider === config.provider && (config.baseUrl ? p.base_url.includes(config.baseUrl) || config.baseUrl.includes(p.base_url) : true)) ||
     savedPresets.find((p) => p.provider === config.provider);
+
+  const isKeyUnlocked = !hasApiPassword || Boolean(activePreset?.id && unlockedKeys[activePreset.id]);
+  const isKeyEditable = !hasApiPassword || Boolean(activePreset?.id && unlockedKeys[activePreset.id]) || !activePreset?.id;
+  const displayKeyValue = (hasApiPassword && !isKeyUnlocked)
+    ? "••••••••••••••••••••••••••••••••"
+    : (activePreset?.id && unlockedKeys[activePreset.id] ? unlockedKeys[activePreset.id] : config.apiKey);
 
   const handleAddAndSaveNewModel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,6 +528,7 @@ export default function AiJudgeConsole({
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
+            action: "add-model",
             id: targetPreset.id,
             preset_name: targetPreset.preset_name,
             provider: targetPreset.provider,
@@ -734,7 +894,13 @@ export default function AiJudgeConsole({
               </div>
               <button
                 type="button"
-                onClick={() => setShowSavePresetModal(true)}
+                onClick={() => {
+                  if (hasApiPassword) {
+                    handleOpenUnlockChallenge("create");
+                  } else {
+                    setShowSavePresetModal(true);
+                  }
+                }}
                 style={{
                   padding: "4px 10px",
                   background: "#9b30ff",
@@ -790,7 +956,13 @@ export default function AiJudgeConsole({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleOpenEditPreset(p)}
+                        onClick={() => {
+                          if (hasApiPassword) {
+                            handleOpenUnlockChallenge("edit", p);
+                          } else {
+                            executeOpenEditPreset(p);
+                          }
+                        }}
                         style={{
                           background: "transparent",
                           border: "none",
@@ -805,7 +977,13 @@ export default function AiJudgeConsole({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeletePreset(p.id, p.preset_name)}
+                        onClick={() => {
+                          if (hasApiPassword) {
+                            handleOpenUnlockChallenge("delete", p);
+                          } else {
+                            executeDeletePreset(p.id, p.preset_name);
+                          }
+                        }}
                         style={{
                           background: "transparent",
                           border: "none",
@@ -1121,47 +1299,76 @@ export default function AiJudgeConsole({
 
             {/* API Key */}
             <div>
-              <label
-                style={{
-                  display: "block",
-                  fontFamily: "Oswald, sans-serif",
-                  fontSize: "11px",
-                  color: "#aaa",
-                  marginBottom: "4px"
-                }}
-              >
-                API KEY:
-              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <label
+                  style={{
+                    fontFamily: "Oswald, sans-serif",
+                    fontSize: "11px",
+                    color: "#aaa"
+                  }}
+                >
+                  API KEY:
+                </label>
+                {hasApiPassword && (
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: isKeyUnlocked ? "#34C759" : "#f4c300",
+                      fontFamily: "Oswald",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
+                  >
+                    {isKeyUnlocked ? "🔓 UNLOCKED" : "🔒 ENCRYPTED (PROTECTED)"}
+                  </span>
+                )}
+              </div>
               <div style={{ display: "flex", gap: "6px" }}>
                 <input
-                  type={showApiKey ? "text" : "password"}
-                  value={config.apiKey}
-                  onChange={(e) => updateConfigField("apiKey", e.target.value)}
-                  placeholder="Paste your API key..."
+                  type={showApiKey && isKeyUnlocked ? "text" : "password"}
+                  value={displayKeyValue}
+                  onChange={(e) => {
+                    if (isKeyEditable) {
+                      updateConfigField("apiKey", e.target.value);
+                      if (activePreset?.id && unlockedKeys[activePreset.id]) {
+                        setUnlockedKeys((prev) => ({ ...prev, [activePreset.id]: e.target.value }));
+                      }
+                    }
+                  }}
+                  readOnly={!isKeyEditable}
+                  placeholder={hasApiPassword && !isKeyUnlocked ? "••••••••••••••••••••••••••••••••" : "Paste your API key..."}
                   style={{
                     flex: 1,
                     padding: "8px 10px",
                     background: "#121212",
-                    border: "1px solid #444",
+                    border: isKeyUnlocked && hasApiPassword ? "1px solid #34C759" : "1px solid #444",
                     color: "#fff",
                     fontFamily: "monospace",
                     fontSize: "12px",
-                    outline: "none"
+                    outline: "none",
+                    cursor: isKeyEditable ? "text" : "not-allowed"
                   }}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
+                  onClick={handleToggleShowApiKey}
                   style={{
                     padding: "6px 10px",
-                    background: "#222",
-                    border: "1px solid #444",
-                    color: "#aaa",
+                    background: isKeyUnlocked && hasApiPassword ? "rgba(255, 59, 48, 0.2)" : "#222",
+                    border: isKeyUnlocked && hasApiPassword ? "1px solid #ff4444" : "1px solid #444",
+                    color: isKeyUnlocked && hasApiPassword ? "#ff8888" : "#aaa",
                     fontSize: "11px",
-                    cursor: "pointer"
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
                   }}
+                  title={hasApiPassword && !isKeyUnlocked ? "Enter API Encryption Password to reveal key" : "Toggle key visibility"}
                 >
-                  {showApiKey ? "HIDE" : "SHOW"}
+                  {hasApiPassword
+                    ? (isKeyUnlocked ? (showApiKey ? "HIDE & LOCK 🔒" : "SHOW") : "SHOW 🔒")
+                    : (showApiKey ? "HIDE" : "SHOW")}
                 </button>
               </div>
             </div>
@@ -1771,6 +1978,141 @@ export default function AiJudgeConsole({
           }}
         >
           ⚠️ {errorMessage}
+        </div>
+      )}
+
+      {/* Modal: API Encryption Password Challenge */}
+      {showUnlockPasswordModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.82)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 110,
+            padding: "20px"
+          }}
+          onClick={() => {
+            if (!isVerifyingPassword) {
+              setShowUnlockPasswordModal(false);
+              setUnlockTarget(null);
+            }
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "440px",
+              backgroundColor: "#1c1b1b",
+              border: "2px solid #34C759",
+              boxShadow: "6px 6px 0px #f4c300",
+              padding: "24px",
+              boxSizing: "border-box"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #333", paddingBottom: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "18px" }}>🔒</span>
+                <span className="curate-anton" style={{ fontSize: "16px", color: "#f4c300" }}>
+                  API ENCRYPTION PASSWORD REQUIRED
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isVerifyingPassword) {
+                    setShowUnlockPasswordModal(false);
+                    setUnlockTarget(null);
+                  }
+                }}
+                style={{ background: "transparent", border: "none", color: "#888", fontSize: "16px", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: "12px", color: "#ccc", margin: "0 0 14px 0", lineHeight: "1.4", fontFamily: "Oswald" }}>
+              {unlockTarget?.type === "reveal" && "Enter your private API encryption password to reveal this provider's secret key."}
+              {unlockTarget?.type === "create" && "Enter your API encryption password to authorize saving a new provider preset."}
+              {unlockTarget?.type === "edit" && `Enter your API encryption password to edit or reconfigure preset "${unlockTarget.preset?.preset_name}".`}
+              {unlockTarget?.type === "delete" && `Enter your API encryption password to authorize deleting preset "${unlockTarget.preset?.preset_name}".`}
+            </p>
+
+            <form onSubmit={handleVerifyUnlockPassword} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div>
+                <label style={{ display: "block", fontFamily: "Oswald", fontSize: "11px", color: "#aaa", marginBottom: "4px" }}>
+                  ENTER API ENCRYPTION PASSWORD:
+                </label>
+                <input
+                  type="password"
+                  value={unlockPasswordInput}
+                  onChange={(e) => setUnlockPasswordInput(e.target.value)}
+                  placeholder="Your API encryption password..."
+                  autoFocus
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    background: "#121212",
+                    border: "1px solid #555",
+                    color: "#fff",
+                    fontFamily: "monospace",
+                    fontSize: "13px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {unlockErrorMsg && (
+                <div style={{ background: "rgba(255, 59, 48, 0.15)", border: "1px solid #FF3B30", color: "#FF3B30", padding: "8px 10px", fontSize: "11px", fontFamily: "Oswald" }}>
+                  ✕ {unlockErrorMsg}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                <button
+                  type="submit"
+                  disabled={isVerifyingPassword}
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                    background: "#34C759",
+                    color: "#000",
+                    border: "2px solid black",
+                    boxShadow: "2px 2px 0px black",
+                    fontFamily: "Anton",
+                    fontSize: "14px",
+                    cursor: isVerifyingPassword ? "wait" : "pointer"
+                  }}
+                >
+                  {isVerifyingPassword ? "VERIFYING..." : "VERIFY & UNLOCK"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isVerifyingPassword}
+                  onClick={() => {
+                    setShowUnlockPasswordModal(false);
+                    setUnlockTarget(null);
+                  }}
+                  style={{
+                    padding: "8px 14px",
+                    background: "#333",
+                    color: "#ddd",
+                    border: "1px solid #555",
+                    fontFamily: "Oswald",
+                    fontSize: "12px",
+                    cursor: "pointer"
+                  }}
+                >
+                  CANCEL
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

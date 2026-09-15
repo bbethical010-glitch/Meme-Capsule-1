@@ -5,22 +5,26 @@
  *
  * Dedicated AI model presets endpoint isolated strictly per individual judge.
  * - Merges presets sharing common providers/credentials into unified Provider Presets.
- * - Supports model arrays, inline model addition, and model-specific deletion.
- * - Encrypts API keys with AES-GCM-256 at rest in Cloudflare D1.
+ * - Masks API keys on GET if the judge has an API encryption password set.
+ * - Secure reveal action protected by judge's API encryption password.
+ * - Protects preset creation, deletion, and credential modifications from unauthorized account sharers.
+ * - Allows model switching, model additions, and AI evaluations seamlessly without requiring passwords.
  */
 
 import type { PagesFunction } from "../../_shared/pages";
-import { json, type Env } from "../../_shared/d1r2";
-import { requireAuth } from "../../_shared/catAuth";
+import { json, handleD1Error, type Env } from "../../_shared/d1r2";
+import { requireAuth, verifyPassword } from "../../_shared/catAuth";
 import { ensureCurationTables } from "../../_shared/curateDb";
 import { encryptApiKey, decryptApiKey } from "../../_shared/crypto";
 
 interface SavePresetPayload {
   id?: string;
+  action?: string;
   preset_name?: string;
   provider?: string;
   base_url?: string;
   api_key?: string;
+  api_password?: string;
   model?: string;
   models?: string[];
   settings?: Record<string, unknown>;
@@ -70,6 +74,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const sessionUser = await requireAuth(request, env);
     const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
 
+    // Check if this judge has set a private API Encryption Password
+    const userRow = await env.DB.prepare(
+      "SELECT api_password_hash FROM cat_users WHERE id = ?"
+    ).bind(sessionUser.id).first<{ api_password_hash: string | null }>();
+    const hasApiPassword = Boolean(userRow?.api_password_hash);
+
     const results = await env.DB.prepare(`
       SELECT id, preset_name, provider, base_url, api_key, model, settings, created_at, updated_at
       FROM cat_judge_ai_presets
@@ -79,7 +89,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
     const rawRows = results.results || [];
     if (rawRows.length === 0) {
-      return json({ success: true, presets: [] });
+      return json({ success: true, presets: [], has_api_password: hasApiPassword });
     }
 
     // Decrypt API keys and parse settings
@@ -175,11 +185,22 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
-    return json({ success: true, presets: mergedPresets });
+    // Mask the raw API key if this judge has an API encryption password configured
+    // This prevents the real secret key from appearing in the DevTools Network response or DOM Elements
+    const sanitizedPresets = mergedPresets.map((p) => {
+      const hasKey = Boolean(p.api_key && p.api_key.trim());
+      const isMasked = hasApiPassword && hasKey;
+      return {
+        ...p,
+        api_key: isMasked ? "••••••••••••••••••••••••••••••••" : p.api_key,
+        has_api_key: hasKey,
+        is_key_masked: isMasked
+      };
+    });
+
+    return json({ success: true, presets: sanitizedPresets, has_api_password: hasApiPassword });
   } catch (err: unknown) {
-    if (err instanceof Response) return err;
-    const msg = err instanceof Error ? err.message : "Error retrieving presets";
-    return json({ error: msg }, { status: 500 });
+    return handleD1Error(err, "Error retrieving presets");
   }
 };
 
@@ -190,6 +211,54 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
 
     const body = (await request.json().catch(() => ({}))) as SavePresetPayload;
+
+    // Check judge's API encryption password status
+    const userRow = await env.DB.prepare(
+      "SELECT api_password_hash FROM cat_users WHERE id = ?"
+    ).bind(sessionUser.id).first<{ api_password_hash: string | null }>();
+    const hasApiPassword = Boolean(userRow?.api_password_hash);
+
+    // ACTION: Reveal plaintext API key (Requires verified API encryption password)
+    if (body.action === "reveal-key") {
+      const presetId = (body.id || "").trim();
+      const enteredPassword = (body.api_password || "").trim();
+
+      if (hasApiPassword) {
+        if (!enteredPassword) {
+          return json({ error: "API encryption password is required to reveal key.", valid: false }, { status: 400 });
+        }
+        const isValid = await verifyPassword(enteredPassword, userRow!.api_password_hash!);
+        if (!isValid) {
+          return json({ error: "Incorrect API encryption password.", valid: false }, { status: 401 });
+        }
+      }
+
+      const targetPreset = await env.DB.prepare(
+        "SELECT api_key FROM cat_judge_ai_presets WHERE id = ? AND user_id = ?"
+      ).bind(presetId, sessionUser.id).first<{ api_key: string }>();
+
+      if (!targetPreset) {
+        return json({ error: "Preset not found." }, { status: 404 });
+      }
+
+      const decryptedKey = await decryptApiKey(targetPreset.api_key || "", secretSeed);
+      return json({ success: true, api_key: decryptedKey });
+    }
+
+    const isOnlyAddingModel = body.action === "add-model";
+
+    // Permission enforcement: Creating a new preset or reconfiguring requires API encryption password if configured
+    if (hasApiPassword && !isOnlyAddingModel) {
+      const enteredPassword = (body.api_password || "").trim() || request.headers.get("X-Api-Password") || "";
+      const isValid = await verifyPassword(enteredPassword, userRow!.api_password_hash!);
+      if (!isValid) {
+        return json({
+          error: "API encryption password required to create or modify presets.",
+          requiresPassword: true
+        }, { status: 401 });
+      }
+    }
+
     const provider = (body.provider || "custom").trim();
     const baseUrl = normalizeBaseUrl(body.base_url || "", provider);
     const rawApiKey = (body.api_key || "").trim();
@@ -219,18 +288,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const settingsStr = JSON.stringify(settingsObj);
     const now = new Date().toISOString();
 
+    const isMaskedKey = rawApiKey.startsWith("•••") || rawApiKey === "";
+
     if (body.id) {
       // Update existing preset
       const existing = await env.DB.prepare(`
         SELECT id, api_key FROM cat_judge_ai_presets WHERE id = ? AND user_id = ?
-      `).bind(body.id, sessionUser.id).first();
+      `).bind(body.id, sessionUser.id).first<{ id: string; api_key: string }>();
 
       if (!existing) {
         return json({ error: "Preset not found or unauthorized." }, { status: 404 });
       }
 
-      // If key was not modified in edit form, keep existing encrypted key
-      const storedApiKey = rawApiKey
+      // If key was not modified (or masked bullets were passed), retain existing encrypted key
+      const storedApiKey = (!isMaskedKey && rawApiKey)
         ? await encryptApiKey(rawApiKey, secretSeed)
         : String(existing.api_key || "");
 
@@ -240,6 +311,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         WHERE id = ? AND user_id = ?
       `).bind(presetName, provider, baseUrl, storedApiKey, model, settingsStr, now, body.id, sessionUser.id).run();
 
+      const returnKey = hasApiPassword ? "••••••••••••••••••••••••••••••••" : (rawApiKey || (await decryptApiKey(storedApiKey, secretSeed)));
+
       return json({
         success: true,
         preset: {
@@ -248,7 +321,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           preset_name: presetName,
           provider,
           base_url: baseUrl,
-          api_key: rawApiKey || (await decryptApiKey(storedApiKey, secretSeed)),
+          api_key: returnKey,
+          has_api_key: Boolean(storedApiKey),
+          is_key_masked: hasApiPassword,
           model,
           models,
           settings: settingsObj,
@@ -261,7 +336,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const existingGroup = await env.DB.prepare(`
       SELECT id, api_key, settings FROM cat_judge_ai_presets
       WHERE user_id = ? AND provider = ? AND base_url = ?
-    `).bind(sessionUser.id, provider, baseUrl).first();
+    `).bind(sessionUser.id, provider, baseUrl).first<{ id: string; api_key: string; settings: string }>();
 
     if (existingGroup) {
       const existingId = String(existingGroup.id);
@@ -279,15 +354,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ...(body.settings || {}),
         models: existingModels
       };
-      const storedApiKey = rawApiKey
+
+      const storedApiKey = (!isMaskedKey && rawApiKey)
         ? await encryptApiKey(rawApiKey, secretSeed)
         : String(existingGroup.api_key || "");
 
       await env.DB.prepare(`
         UPDATE cat_judge_ai_presets
-        SET preset_name = ?, model = ?, api_key = ?, settings = ?, updated_at = ?
+        SET preset_name = ?, model = ?, settings = ?, api_key = ?, updated_at = ?
         WHERE id = ? AND user_id = ?
-      `).bind(presetName, model, storedApiKey, JSON.stringify(updatedSettings), now, existingId, sessionUser.id).run();
+      `).bind(presetName, model, JSON.stringify(updatedSettings), storedApiKey, now, existingId, sessionUser.id).run();
+
+      const returnKey = hasApiPassword ? "••••••••••••••••••••••••••••••••" : (rawApiKey || (await decryptApiKey(storedApiKey, secretSeed)));
 
       return json({
         success: true,
@@ -297,7 +375,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           preset_name: presetName,
           provider,
           base_url: baseUrl,
-          api_key: rawApiKey || (await decryptApiKey(storedApiKey, secretSeed)),
+          api_key: returnKey,
+          has_api_key: Boolean(storedApiKey),
+          is_key_masked: hasApiPassword,
           model,
           models: existingModels,
           settings: updatedSettings,
@@ -306,16 +386,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       });
     }
 
-    // Insert new preset
-    const newId = `preset-${crypto.randomUUID().slice(0, 8)}`;
-    const storedApiKey = await encryptApiKey(rawApiKey, secretSeed);
+    // Create brand new preset
+    const newId = `preset-${crypto.randomUUID().slice(0, 10)}`;
+    const storedApiKey = rawApiKey ? await encryptApiKey(rawApiKey, secretSeed) : "";
 
     await env.DB.prepare(`
       INSERT INTO cat_judge_ai_presets (
         id, user_id, preset_name, provider, base_url, api_key, model, settings, created_at, updated_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(newId, sessionUser.id, presetName, provider, baseUrl, storedApiKey, model, settingsStr, now, now).run();
+    `).bind(
+      newId,
+      sessionUser.id,
+      presetName,
+      provider,
+      baseUrl,
+      storedApiKey,
+      model,
+      settingsStr,
+      now,
+      now
+    ).run();
+
+    const returnKey = hasApiPassword ? "••••••••••••••••••••••••••••••••" : rawApiKey;
 
     return json({
       success: true,
@@ -325,7 +418,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         preset_name: presetName,
         provider,
         base_url: baseUrl,
-        api_key: rawApiKey,
+        api_key: returnKey,
+        has_api_key: Boolean(storedApiKey),
+        is_key_masked: hasApiPassword,
         model,
         models,
         settings: settingsObj,
@@ -334,9 +429,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     });
   } catch (err: unknown) {
-    if (err instanceof Response) return err;
-    const msg = err instanceof Error ? err.message : "Error saving preset";
-    return json({ error: msg }, { status: 500 });
+    return handleD1Error(err, "Error saving preset");
   }
 };
 
@@ -346,22 +439,40 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
     const sessionUser = await requireAuth(request, env);
 
     const url = new URL(request.url);
-    const presetId = url.searchParams.get("id");
-    const modelToDelete = url.searchParams.get("model");
+    const presetId = (url.searchParams.get("id") || "").trim();
+    const modelToDelete = (url.searchParams.get("model") || "").trim();
 
     if (!presetId) {
       return json({ error: "Preset id parameter is required." }, { status: 400 });
     }
 
+    // Check judge's API encryption password status
+    const userRow = await env.DB.prepare(
+      "SELECT api_password_hash FROM cat_users WHERE id = ?"
+    ).bind(sessionUser.id).first<{ api_password_hash: string | null }>();
+    const hasApiPassword = Boolean(userRow?.api_password_hash);
+
+    // Permission enforcement: Deleting an entire preset requires API encryption password if configured
+    if (hasApiPassword && !modelToDelete) {
+      const enteredPassword = request.headers.get("X-Api-Password") || url.searchParams.get("api_password") || "";
+      const isValid = await verifyPassword(enteredPassword, userRow!.api_password_hash!);
+      if (!isValid) {
+        return json({
+          error: "API encryption password required to delete presets.",
+          requiresPassword: true
+        }, { status: 401 });
+      }
+    }
+
     const existing = await env.DB.prepare(`
       SELECT id, model, settings FROM cat_judge_ai_presets WHERE id = ? AND user_id = ?
-    `).bind(presetId, sessionUser.id).first();
+    `).bind(presetId, sessionUser.id).first<{ id: string; model: string; settings: string }>();
 
     if (!existing) {
       return json({ error: "Preset not found or unauthorized." }, { status: 404 });
     }
 
-    // If deleting a specific model from the preset's model list
+    // If deleting a specific model from the preset's model list (Allowed without password)
     if (modelToDelete) {
       let parsedSettings: Record<string, unknown> = {};
       try {
@@ -403,8 +514,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
 
     return json({ success: true, message: "Preset deleted successfully." });
   } catch (err: unknown) {
-    if (err instanceof Response) return err;
-    const msg = err instanceof Error ? err.message : "Error deleting preset";
-    return json({ error: msg }, { status: 500 });
+    return handleD1Error(err, "Error deleting preset");
   }
 };

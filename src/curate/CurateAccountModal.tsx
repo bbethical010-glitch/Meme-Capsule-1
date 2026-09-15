@@ -19,27 +19,67 @@ export default function CurateAccountModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
 
+  // Dedicated API Key Encryption Password State
+  const [hasApiPassword, setHasApiPassword] = useState<boolean>(Boolean(user.has_api_password));
+  const [currentApiPassword, setCurrentApiPassword] = useState("");
+  const [newApiPassword, setNewApiPassword] = useState("");
+  const [confirmApiPassword, setConfirmApiPassword] = useState("");
+  const [showApiPasswords, setShowApiPasswords] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Sync live account status on mount
+  React.useEffect(() => {
+    const token = sessionStorage.getItem("curator_token");
+    if (!token) return;
+    fetch("/api/curate/account", {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user?.has_api_password !== undefined) {
+          setHasApiPassword(Boolean(data.user.has_api_password));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    // Login password validations
     if (newPassword && newPassword !== confirmPassword) {
-      setErrorMsg("New passwords do not match.");
+      setErrorMsg("New login passwords do not match.");
       return;
     }
 
     if (newPassword && newPassword.length < 6) {
-      setErrorMsg("New password must be at least 6 characters.");
+      setErrorMsg("New login password must be at least 6 characters.");
       return;
     }
 
     if (newPassword && !currentPassword) {
-      setErrorMsg("Current password is required to set a new password.");
+      setErrorMsg("Current login password is required to set a new password.");
+      return;
+    }
+
+    // API Key Encryption Password validations
+    if (newApiPassword && newApiPassword !== confirmApiPassword) {
+      setErrorMsg("New API encryption passwords do not match.");
+      return;
+    }
+
+    if (newApiPassword && newApiPassword.length < 4) {
+      setErrorMsg("New API encryption password must be at least 4 characters.");
+      return;
+    }
+
+    if (newApiPassword && hasApiPassword && !currentApiPassword) {
+      setErrorMsg("Current API encryption password is required to change it.");
       return;
     }
 
@@ -61,7 +101,9 @@ export default function CurateAccountModal({
           display_name: displayName.trim(),
           username: username.trim(),
           current_password: currentPassword || undefined,
-          new_password: newPassword || undefined
+          new_password: newPassword || undefined,
+          current_api_password: currentApiPassword || undefined,
+          new_api_password: newApiPassword || undefined
         })
       });
 
@@ -75,10 +117,17 @@ export default function CurateAccountModal({
       sessionStorage.setItem("curator_user", JSON.stringify(updated));
       onAccountUpdated(updated);
 
-      setSuccessMsg("Account credentials updated successfully!");
+      if (data.user?.has_api_password !== undefined) {
+        setHasApiPassword(Boolean(data.user.has_api_password));
+      }
+
+      setSuccessMsg("Account credentials and API security updated successfully!");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setCurrentApiPassword("");
+      setNewApiPassword("");
+      setConfirmApiPassword("");
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to update account.");
     } finally {
@@ -262,6 +311,118 @@ export default function CurateAccountModal({
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter new password"
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    background: "#121212",
+                    border: "1px solid #444",
+                    color: "#fff",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Dedicated API Key Encryption Password Section */}
+          <div style={{ borderTop: "2px solid #333", paddingTop: "14px", marginTop: "4px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span className="curate-anton" style={{ fontSize: "14px", color: "#34C759" }}>
+                  API KEY ENCRYPTION PASSWORD
+                </span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    padding: "2px 6px",
+                    background: hasApiPassword ? "rgba(52, 199, 89, 0.2)" : "rgba(255, 149, 0, 0.2)",
+                    color: hasApiPassword ? "#34C759" : "#FF9500",
+                    border: `1px solid ${hasApiPassword ? "#34C759" : "#FF9500"}`,
+                    fontFamily: "Oswald",
+                    fontWeight: 700
+                  }}
+                >
+                  {hasApiPassword ? "PROTECTED (ACTIVE)" : "NOT CONFIGURED"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApiPasswords(!showApiPasswords)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#f4c300",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                  fontFamily: "Oswald"
+                }}
+              >
+                {showApiPasswords ? "HIDE" : "SHOW"} PASSWORDS
+              </button>
+            </div>
+
+            <p style={{ fontSize: "11px", color: "#888", margin: "0 0 10px 0", lineHeight: "1.4" }}>
+              Protects personal AI API keys when sharing your judge account with colleagues. Colleagues can toggle presets, switch models, add new models, and run AI batch judging without passwords, but cannot reveal keys, create, edit, or delete presets without this encryption password.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {hasApiPassword && (
+                <div>
+                  <label style={{ display: "block", fontFamily: "Oswald", fontSize: "11px", color: "#888", marginBottom: "3px" }}>
+                    CURRENT API ENCRYPTION PASSWORD:
+                  </label>
+                  <input
+                    type={showApiPasswords ? "text" : "password"}
+                    value={currentApiPassword}
+                    onChange={(e) => setCurrentApiPassword(e.target.value)}
+                    placeholder="Required to change API password"
+                    style={{
+                      width: "100%",
+                      padding: "6px 10px",
+                      background: "#121212",
+                      border: "1px solid #444",
+                      color: "#fff",
+                      fontFamily: "monospace",
+                      fontSize: "12px",
+                      outline: "none"
+                    }}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: "block", fontFamily: "Oswald", fontSize: "11px", color: "#888", marginBottom: "3px" }}>
+                  {hasApiPassword ? "NEW API ENCRYPTION PASSWORD:" : "SET API ENCRYPTION PASSWORD:"}
+                </label>
+                <input
+                  type={showApiPasswords ? "text" : "password"}
+                  value={newApiPassword}
+                  onChange={(e) => setNewApiPassword(e.target.value)}
+                  placeholder="Min 4 characters"
+                  style={{
+                    width: "100%",
+                    padding: "6px 10px",
+                    background: "#121212",
+                    border: "1px solid #444",
+                    color: "#fff",
+                    fontFamily: "monospace",
+                    fontSize: "12px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontFamily: "Oswald", fontSize: "11px", color: "#888", marginBottom: "3px" }}>
+                  CONFIRM API ENCRYPTION PASSWORD:
+                </label>
+                <input
+                  type={showApiPasswords ? "text" : "password"}
+                  value={confirmApiPassword}
+                  onChange={(e) => setConfirmApiPassword(e.target.value)}
+                  placeholder="Re-enter API encryption password"
                   style={{
                     width: "100%",
                     padding: "6px 10px",
