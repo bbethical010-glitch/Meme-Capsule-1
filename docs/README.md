@@ -17,6 +17,8 @@ A high-performance, minimalist curated meme platform built with **Vite + React +
 - Cloudflare Pages Functions:
   - `GET /api/random-meme`
   - `GET /api/daily-meme`
+  - `POST /api/report`
+  - `/reports` - token-protected visual report dashboard; lists, filters, resolves, and dismisses reports
 - Cloudflare R2 + D1 backend (migrating from Supabase).
 - PWA manifest and production service worker.
 
