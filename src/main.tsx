@@ -5,8 +5,7 @@ import AdminGate from "./admin/AdminGate";
 import CatApp from "./categorise/CatApp";
 import CurateApp from "./curate/CurateApp";
 import AiJudgeApp from "./ai-judge/AiJudgeApp";
-import App from "./App";
-import "./styles.css";
+import "./base.css";
 
 function RootRouter() {
   const [route, setRoute] = useState(() => ({
@@ -52,7 +51,8 @@ function RootRouter() {
     return <CatApp />;
   }
 
-  return <App />;
+  // Default entry route for internal tool workbench
+  return <CurateApp />;
 }
 
 createRoot(document.getElementById("root")!).render(

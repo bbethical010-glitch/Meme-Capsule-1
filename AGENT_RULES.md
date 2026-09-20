@@ -26,7 +26,7 @@ The following core architectural assets and components are protected. AI agents 
 
 ### B. UI/UX Identity & Design Systems
 - **Neo-Brutalist Aesthetic**: Heavy black borders (`border: 2px solid ...`), hard offset box-shadows (`box-shadow: 4px 4px 0px ...`), high-contrast color palettes (yellow `#f4c300`, purple `#9b30ff`, green `#34C759`, dark `#121212`), and bold typography (`Anton`, `Oswald`).
-- **Mobile-First Public PWA**: The core swiping, random drop, reaction, and capsule experience (`src/App.tsx`, `src/styles.css`).
+- **Internal Neo-Brutalist Workbenches**: The operational internal interfaces for curation, administration, and moderation (`/curate`, `/admin`, `/reports`). Note that the public end-user mobile app/APK is maintained in the companion Android repository (`com.meme.capsule`), while this repository serves as the serverless edge backend, database, and internal tooling hub. The discontinued legacy landing UI has been officially removed.
 - **Fallback Mechanism**: The static fallback meme system (`src/data/fallbackMemes.ts`) that guarantees zero-failure offline functionality.
 
 ### C. Authentication & Security Mechanisms
