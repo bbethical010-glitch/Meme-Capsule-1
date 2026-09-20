@@ -18,7 +18,7 @@ A high-performance, minimalist curated meme platform built with **Vite + React +
   - `GET /api/random-meme`
   - `GET /api/daily-meme`
   - `POST /api/report`
-  - `/reports` - token-protected visual report dashboard; lists, filters, resolves, and dismisses reports
+  - `/reports` - token-protected moderation dashboard; previews reported memes, resolves or dismisses reports, archives memes, and can add them to `content_blacklist`
 - Cloudflare R2 + D1 backend (migrating from Supabase).
 - PWA manifest and production service worker.
 
