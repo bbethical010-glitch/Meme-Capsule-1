@@ -2,6 +2,7 @@ import type { PagesFunction } from "./_shared/pages";
 import { json, requireAdmin, type Env } from "./_shared/d1r2";
 
 type ReportStatus = "pending" | "resolved" | "dismissed";
+type ReportAction = ReportStatus | "archive_meme" | "blacklist_meme";
 
 type ReportRow = {
   id: string | number;
@@ -217,7 +218,11 @@ const dashboardHtml = String.raw`<!doctype html>
             '<div class="meta"><span class="id">MEME ID: '+escapeHtml(report.meme_id||"N/A")+'</span><span>AUTHOR: '+escapeHtml(report.author||"UNKNOWN")+'</span><span>DEVICE: '+escapeHtml(report.device_id||"UNKNOWN")+'</span></div>'+
             '<div class="copy-row"><span class="path">FILE: '+escapeHtml(storagePath(url))+'</span><button class="copy-button secondary" type="button" data-copy="'+escapeHtml(url)+'">Copy URL</button></div>'+
             (report.details?'<div class="details"><div class="label">Reporter\'s comment</div><p>'+escapeHtml(report.details)+'</p></div>':"")+
-            '<div class="actions">'+(report.status!=="resolved"?'<button class="resolve" data-id="'+escapeHtml(id)+'" data-status="resolved" type="button">Resolve</button>':"")+(report.status!=="dismissed"?'<button class="danger" data-id="'+escapeHtml(id)+'" data-status="dismissed" type="button">Dismiss</button>':"")+'</div>'+
+            '<div class="actions">'+
+              (report.status!=="resolved"?'<button class="resolve" data-id="'+escapeHtml(id)+'" data-action="resolved" type="button">Resolve</button>':"")+
+              (report.status!=="dismissed"?'<button class="danger" data-id="'+escapeHtml(id)+'" data-action="dismissed" type="button">Dismiss</button>':"")+
+              (report.meme_id?'<button class="danger" data-id="'+escapeHtml(id)+'" data-action="archive_meme" data-meme-id="'+escapeHtml(report.meme_id)+'" type="button">Remove Meme</button><button class="danger" data-id="'+escapeHtml(id)+'" data-action="blacklist_meme" data-meme-id="'+escapeHtml(report.meme_id)+'" type="button">Blacklist + Remove</button>':"")+
+            '</div>'+
           '</div>'+
         '</article>';
       }).join(""):'<div class="card empty">NO REPORTS MATCH THE CURRENT FILTERS.</div>';
@@ -230,12 +235,14 @@ const dashboardHtml = String.raw`<!doctype html>
       const data=await response.json();state.reports=Array.isArray(data.reports)?data.reports:[];showDashboard(true);render();
     };
     const updateReport=async(button)=>{
-      const id=button.dataset.id,status=button.dataset.status,original=button.textContent;
+      const id=button.dataset.id,action=button.dataset.action,original=button.textContent;
+      const destructive=action==="archive_meme"||action==="blacklist_meme";
+      if(destructive&&!window.confirm(action==="blacklist_meme"?"Blacklist and remove this meme from the public collection?":"Remove this meme from the public collection?"))return;
       button.disabled=true;button.textContent="Updating...";
       try{
-        const response=await fetch("/reports",{method:"PATCH",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({id,status})});
+        const response=await fetch("/reports",{method:"PATCH",headers:{"Content-Type":"application/json",...authHeaders()},body:JSON.stringify({id,action,meme_id:button.dataset.memeId})});
         if(!response.ok){const raw=await response.text();let message=raw;try{message=JSON.parse(raw).error||raw}catch{}throw new Error(message||"Update failed ("+response.status+").")}
-        showToast("Report #"+id+" marked "+status+".","success");await load();
+        showToast(action==="archive_meme"?"Meme removed and report resolved.":action==="blacklist_meme"?"Meme blacklisted, removed, and report resolved.":"Report #"+id+" marked "+action+".","success");await load();
       }catch(error){button.disabled=false;button.textContent=original;showToast(error instanceof Error?error.message:"Unable to update report.")}
     };
     $("unlock").addEventListener("click",async()=>{state.token=$("token").value.trim();if(!state.token){$("login-error").textContent="Admin API token is required.";return}$("login-error").textContent="";sessionStorage.setItem("meme-capsule-report-token",state.token);try{await load()}catch(error){$("login-error").textContent=error instanceof Error?error.message:"Unable to open report desk."}});
@@ -245,7 +252,7 @@ const dashboardHtml = String.raw`<!doctype html>
     $("search").addEventListener("input",render);$("status").addEventListener("change",render);
     $("reports").addEventListener("click",async event=>{
       const button=event.target.closest("button");if(!button)return;
-      if(button.dataset.id){await updateReport(button);return}
+      if(button.dataset.id&&button.dataset.action){await updateReport(button);return}
       if(button.dataset.copy){try{await navigator.clipboard.writeText(button.dataset.copy);showToast("Meme URL copied.","success")}catch{showToast("Clipboard access failed. Copy the URL manually.")};return}
       if(button.dataset.preview){$("lightbox-image").src=button.dataset.preview;$("lightbox-image").alt=button.dataset.title||"Meme preview";$("lightbox").classList.remove("hidden")}
     });
@@ -300,25 +307,79 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
   const authError = requireAdmin(request, env);
   if (authError) return authError;
 
-  let payload: { id?: string | number; status?: ReportStatus };
+  let payload: { id?: string | number; action?: ReportAction; meme_id?: string };
   try {
-    payload = await request.json() as { id?: string | number; status?: ReportStatus };
+    payload = await request.json() as { id?: string | number; action?: ReportAction; meme_id?: string };
   } catch {
     return json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
   const id = payload.id === undefined || payload.id === null ? "" : String(payload.id).trim();
-  if (!id || !payload.status || !["pending", "resolved", "dismissed"].includes(payload.status)) {
-    return json({ error: "A report id and status of pending, resolved, or dismissed are required." }, { status: 400 });
+  const action = payload.action;
+  if (!id || !action || !["pending", "resolved", "dismissed", "archive_meme", "blacklist_meme"].includes(action)) {
+    return json({ error: "A report id and valid moderation action are required." }, { status: 400 });
   }
 
+  const report = await env.DB.prepare(
+    "SELECT meme_id FROM meme_reports WHERE id = ?"
+  ).bind(id).first<{ meme_id: string | null }>();
+  if (!report) {
+    return json({ error: "Report not found." }, { status: 404 });
+  }
+
+  if (action === "archive_meme" || action === "blacklist_meme") {
+    const memeId = String(report.meme_id || "").trim();
+    if (!memeId) {
+      return json({ error: "This report is not linked to a meme ID, so the meme cannot be removed safely." }, { status: 400 });
+    }
+
+    const meme = await env.DB.prepare("SELECT id FROM memes WHERE id = ?").bind(memeId).first<{ id: string }>();
+    if (!meme) {
+      return json({ error: "The reported meme no longer exists." }, { status: 404 });
+    }
+
+    if (action === "blacklist_meme") {
+      const columns = await env.DB.prepare("PRAGMA table_info(content_blacklist)").all<{
+        name: string;
+        notnull: number;
+        dflt_value: string | null;
+      }>();
+      const available = new Set((columns.results || []).map((column) => column.name));
+      const values: Record<string, string | number> = {};
+      const idColumn = ["meme_id", "id", "content_id"].find((column) => available.has(column));
+      if (!idColumn) {
+        return json({ error: "content_blacklist has no supported meme identifier column." }, { status: 500 });
+      }
+      values[idColumn] = memeId;
+      if (available.has("reason")) values.reason = "User report";
+      if (available.has("source")) values.source = "Meme Capsule Reports";
+      if (available.has("report_id")) values.report_id = id;
+      if (available.has("created_at")) values.created_at = Date.now();
+      if (available.has("updated_at")) values.updated_at = Date.now();
+
+      const entries = Object.entries(values);
+      const quoteIdentifier = (value: string) => `"${value.replace(/"/g, "\"\"")}"`;
+      await env.DB.prepare(
+        `INSERT OR REPLACE INTO content_blacklist (${entries.map(([column]) => quoteIdentifier(column)).join(", ")})
+         VALUES (${entries.map(() => "?").join(", ")})`
+      ).bind(...entries.map(([, value]) => value)).run();
+    }
+
+    await env.DB.prepare(
+      "UPDATE memes SET status = 'archived', is_active = 0 WHERE id = ?"
+    ).bind(memeId).run();
+  }
+
+  const status: ReportStatus = action === "archive_meme" || action === "blacklist_meme"
+    ? "resolved"
+    : action;
   const result = await env.DB.prepare(
     "UPDATE meme_reports SET status = ?, updated_at = ? WHERE id = ?"
-  ).bind(payload.status, Date.now(), id).run();
+  ).bind(status, Date.now(), id).run();
 
   if (!result.meta.changes) {
     return json({ error: "Report not found or status was unchanged." }, { status: 404 });
   }
 
-  return json({ success: true, id, status: payload.status });
+  return json({ success: true, id, status, action });
 };

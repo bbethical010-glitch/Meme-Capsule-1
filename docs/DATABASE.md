@@ -145,6 +145,20 @@ Routes:
 - `DELETE /api/admin/memes`: archives one metadata row instead of hard deleting.
 - `POST /api/admin/upload`: uploads one image/video file to R2 and returns `storage_path` plus public URL.
 
+## Report moderation
+
+The token-protected `/reports` dashboard supports report status changes
+(`pending`, `resolved`, and `dismissed`) plus destructive moderation actions for
+reports linked to a `meme_id`:
+
+- **Remove Meme** archives the row in `memes` and sets `is_active = 0`.
+- **Blacklist + Remove** inserts the meme into the existing `content_blacklist`
+  table, then archives it and resolves the report.
+
+Destructive actions use the meme ID stored on the report rather than trusting a
+browser-supplied target. The dashboard requires `ADMIN_API_TOKEN` and asks for
+confirmation before removing or blacklisting content.
+
 Public routes never use the admin token. They only return rows with `status = 'active'` and `is_active = 1`.
 
 ## Google Drive Workflow
