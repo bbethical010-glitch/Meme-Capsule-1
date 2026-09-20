@@ -105,14 +105,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       )
       .run();
 
-    // Update active state in memes table
+    // Update active state and status in memes table
     const isActive = corpusStatus === "keep" ? 1 : 0;
+    const newStatus = corpusStatus === "excluded" ? "archived" : (corpusStatus === "keep" ? "active" : null);
 
-    await env.DB.prepare(
-      "UPDATE memes SET is_active = ? WHERE id = ?",
-    )
-      .bind(isActive, memeId)
-      .run();
+    if (newStatus) {
+      await env.DB.prepare(
+        "UPDATE memes SET is_active = ?, status = ? WHERE id = ?"
+      )
+        .bind(isActive, newStatus, memeId)
+        .run();
+    } else {
+      await env.DB.prepare(
+        "UPDATE memes SET is_active = ? WHERE id = ?"
+      )
+        .bind(isActive, memeId)
+        .run();
+    }
 
     return json({
       success: true,

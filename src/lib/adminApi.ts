@@ -101,3 +101,15 @@ export const syncR2ToD1 = async (adminToken: string) => {
   return parseJsonResponse<SyncR2Response>(response);
 };
 
+export const hardDeleteBackendMemes = async (adminToken: string, ids: string[]) => {
+  const response = await fetch("/api/admin/memes/hard-delete", {
+    method: "POST",
+    headers: {
+      ...authHeaders(adminToken),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ ids })
+  });
+  const payload = await parseJsonResponse<{ success: boolean; deletedCount: number; message: string }>(response);
+  return payload;
+};

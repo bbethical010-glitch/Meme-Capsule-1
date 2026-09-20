@@ -493,7 +493,9 @@ export default function AiJudgeConsole({
     setIsTesting(false);
   };
 
-  const isConfigured = Boolean(config.baseUrl && (config.apiKey || config.provider === "custom"));
+  const isConfigured = Boolean(
+    config.baseUrl && (config.apiKey || config.activePresetId || config.provider === "custom")
+  );
   const activeTemplate = AI_PROVIDER_PRESETS.find((p) => p.id === config.provider) || AI_PROVIDER_PRESETS[0];
 
   const activePreset =

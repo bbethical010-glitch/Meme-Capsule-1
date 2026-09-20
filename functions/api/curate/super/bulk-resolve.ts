@@ -94,9 +94,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
 
       const isActive = r.corpus_status === "keep" ? 1 : 0;
-      stmts.push(
-        env.DB.prepare("UPDATE memes SET is_active = ? WHERE id = ?").bind(isActive, r.meme_id)
-      );
+      const newStatus = r.corpus_status === "excluded" ? "archived" : (r.corpus_status === "keep" ? "active" : null);
+
+      if (newStatus) {
+        stmts.push(
+          env.DB.prepare("UPDATE memes SET is_active = ?, status = ? WHERE id = ?").bind(isActive, newStatus, r.meme_id)
+        );
+      } else {
+        stmts.push(
+          env.DB.prepare("UPDATE memes SET is_active = ? WHERE id = ?").bind(isActive, r.meme_id)
+        );
+      }
     }
 
     // Run in batches of 50 to stay well within D1 batch limits

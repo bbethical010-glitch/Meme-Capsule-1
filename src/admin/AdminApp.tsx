@@ -17,7 +17,8 @@ import {
   listBackendMemes,
   saveBackendMeme,
   syncR2ToD1,
-  uploadBackendMemeFile
+  uploadBackendMemeFile,
+  hardDeleteBackendMemes
 } from "../lib/adminApi";
 import {
   AdminMeme,
@@ -59,11 +60,24 @@ interface MemeRowProps {
   backendMode: boolean;
   onEdit: (meme: AdminMeme) => void;
   onDelete: (id: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  isArchivedView?: boolean;
+  onHardDelete?: (id: string) => void;
 }
 
-const MemeRow = React.memo(function MemeRow({ meme, backendMode, onEdit, onDelete }: MemeRowProps) {
+const MemeRow = React.memo(function MemeRow({ meme, backendMode, onEdit, onDelete, isSelected, onToggleSelect, isArchivedView, onHardDelete }: MemeRowProps) {
   return (
-    <div className="collection-row brutalist-border brutalist-shadow-black brutalist-interactive" onClick={() => onEdit(meme)}>
+    <div className={`collection-row brutalist-border brutalist-shadow-black brutalist-interactive ${isSelected ? 'selected' : ''}`} onClick={() => onEdit(meme)}>
+      {isArchivedView && (
+        <div className="row-select" onClick={(e) => e.stopPropagation()}>
+          <input 
+            type="checkbox" 
+            checked={isSelected || false} 
+            onChange={() => onToggleSelect && onToggleSelect(meme.id)} 
+          />
+        </div>
+      )}
       <div className="thumb brutalist-border-sm">
         {meme.media_type === "video" ? (
           <video src={meme.url} muted preload="metadata" />
@@ -107,6 +121,20 @@ const MemeRow = React.memo(function MemeRow({ meme, backendMode, onEdit, onDelet
           <span className="material-symbols-outlined">{backendMode ? "archive" : "delete"}</span>
           {backendMode ? "Archv" : "Del"}
         </button>
+        {isArchivedView && onHardDelete && backendMode && (
+          <button
+            type="button"
+            className="delete-btn brutalist-border-sm"
+            style={{ backgroundColor: "#ff2a2a", color: "#fff" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onHardDelete(meme.id);
+            }}
+          >
+            <span className="material-symbols-outlined">delete_forever</span>
+            Hard Del
+          </button>
+        )}
       </div>
     </div>
   );
@@ -130,6 +158,12 @@ export default function AdminApp() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft" | "archived">("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Clear selections when filter changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [statusFilter, searchTerm]);
 
   useEffect(() => {
     if (adminToken.trim()) {
@@ -429,6 +463,46 @@ export default function AdminApp() {
     }
   }, [backendMode, adminToken, editingOriginalId, collection]);
 
+  const hardDeleteMemes = useCallback(async (ids: string[]) => {
+    if (!backendMode || !adminToken.trim() || ids.length === 0) return;
+    
+    if (!window.confirm(`Are you sure you want to permanently delete ${ids.length} meme(s)? This will remove them from D1 metadata and delete the files from R2 forever.`)) {
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncActionName(`Hard deleting ${ids.length} meme(s)...`);
+    try {
+      const response = await hardDeleteBackendMemes(adminToken, ids);
+      const idsSet = new Set(ids);
+      setCollection((current) => current.filter((meme) => !idsSet.has(meme.id)));
+      setSelectedIds(new Set());
+      setNotice(`✅ ${response.message}`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Backend hard delete failed.");
+    } finally {
+      setIsSyncing(false);
+      setSyncActionName("");
+    }
+  }, [backendMode, adminToken]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedIds.size === paginatedMemes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedMemes.map((m) => m.id)));
+    }
+  }, [paginatedMemes, selectedIds.size]);
+
   const exportCollection = () => {
     const blob = new Blob([JSON.stringify(collection, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -665,6 +739,34 @@ export default function AdminApp() {
                   </div>
                 </div>
 
+                {/* Bulk Actions */}
+                {statusFilter === "archived" && (
+                  <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px", padding: "12px", background: "var(--surface-container)", border: "2px solid black" }}>
+                    <button
+                      type="button"
+                      onClick={handleSelectAll}
+                      className="brutalist-border-sm brutalist-interactive"
+                      style={{ padding: "6px 12px", background: "var(--surface-container-high)", color: "var(--on-surface)", fontWeight: "bold" }}
+                    >
+                      {selectedIds.size === paginatedMemes.length && paginatedMemes.length > 0 ? "Deselect All" : "Select All"}
+                    </button>
+                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--secondary)" }}>
+                      {selectedIds.size} selected
+                    </span>
+                    {selectedIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => hardDeleteMemes(Array.from(selectedIds))}
+                        className="brutalist-border-sm brutalist-interactive"
+                        style={{ marginLeft: "auto", padding: "6px 12px", background: "#ff2a2a", color: "#fff", fontWeight: "bold", display: "flex", alignItems: "center", gap: "4px" }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "18px" }}>delete_forever</span>
+                        Permanently Delete Selected
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Paginated Collection List */}
                 <div className="collection-list custom-scrollbar">
                   {filteredCollection.length === 0 ? (
@@ -679,6 +781,10 @@ export default function AdminApp() {
                         backendMode={backendMode}
                         onEdit={editMeme}
                         onDelete={deleteMeme}
+                        isSelected={selectedIds.has(meme.id)}
+                        onToggleSelect={handleToggleSelect}
+                        isArchivedView={statusFilter === "archived"}
+                        onHardDelete={(id) => hardDeleteMemes([id])}
                       />
                     ))
                   )}

@@ -76,6 +76,20 @@ Core fields:
 
 Only records with `status = 'active'` and `is_active = 1` should be returned to users.
 
+### Reporting System Table: `meme_reports`
+- `id`: Auto-incrementing integer primary key.
+- `meme_id`: ID of the reported meme (if known).
+- `meme_url`: URL of the reported meme.
+- `meme_title`: Title of the reported meme.
+- `author`: Name or identifier of the reporting user.
+- `source`: Source of the report (e.g. "Meme Capsule").
+- `reason`: Primary reason for the report.
+- `details`: Optional extra details provided by the user.
+- `device_id`: Device identifier of the reporting user.
+- `status`: State of the report (`pending`, `resolved`, `dismissed`).
+- `created_at`: Creation timestamp.
+- `updated_at`: Last updated timestamp.
+
 ## API Flow
 
 Public random meme:

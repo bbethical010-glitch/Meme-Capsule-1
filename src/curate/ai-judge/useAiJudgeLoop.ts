@@ -273,8 +273,8 @@ export function useAiJudgeLoop({
   }, [isRunning, currentMeme, processMeme]);
 
   const start = useCallback(() => {
-    if (!configRef.current.apiKey && configRef.current.provider !== "custom") {
-      setErrorMessage("Please configure an API Key before starting AI Mode.");
+    if (!configRef.current.apiKey && !configRef.current.activePresetId && configRef.current.provider !== "custom") {
+      setErrorMessage("Please configure an API Key or select a saved preset before starting AI Mode.");
       setLoopState("error");
       return;
     }
