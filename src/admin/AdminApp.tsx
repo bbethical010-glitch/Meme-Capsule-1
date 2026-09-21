@@ -907,7 +907,12 @@ export default function AdminApp() {
                         value={form.status} 
                         onChange={(e) => updateForm("status", e.target.value as MemeStatus)}
                       >
-                        <option value="active">Active</option>
+                        <option 
+                          value="active"
+                          disabled={backendMode && Boolean(editingOriginalId) && !(collection.find((m) => m.id === editingOriginalId) as unknown as { is_finalized_keep?: boolean })?.is_finalized_keep}
+                        >
+                          Active {backendMode && Boolean(editingOriginalId) && !(collection.find((m) => m.id === editingOriginalId) as unknown as { is_finalized_keep?: boolean })?.is_finalized_keep ? "(Requires Superadmin Finalization)" : ""}
+                        </option>
                         <option value="draft">Draft</option>
                         <option value="archived">Archived</option>
                       </select>

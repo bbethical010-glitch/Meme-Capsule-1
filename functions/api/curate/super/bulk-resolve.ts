@@ -45,6 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         COUNT(*) as total_reviews
       FROM meme_curation
       WHERE meme_id NOT IN (SELECT meme_id FROM meme_curation_final)
+        AND user_name NOT IN ('AI Judge', 'Judge')
       GROUP BY meme_id
       HAVING status_variants = 1 AND total_reviews >= 2
     `).all<UnanimousGroupRow & { status_variants: number; total_reviews: number }>();
@@ -93,18 +94,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         )
       );
 
+      // Superadmin Finalization: ONLY 'keep' becomes active, everything else becomes archived
       const isActive = r.corpus_status === "keep" ? 1 : 0;
-      const newStatus = r.corpus_status === "excluded" ? "archived" : (r.corpus_status === "keep" ? "active" : null);
+      const newStatus = r.corpus_status === "keep" ? "active" : "archived";
 
-      if (newStatus) {
-        stmts.push(
-          env.DB.prepare("UPDATE memes SET is_active = ?, status = ? WHERE id = ?").bind(isActive, newStatus, r.meme_id)
-        );
-      } else {
-        stmts.push(
-          env.DB.prepare("UPDATE memes SET is_active = ? WHERE id = ?").bind(isActive, r.meme_id)
-        );
-      }
+      stmts.push(
+        env.DB.prepare("UPDATE memes SET is_active = ?, status = ? WHERE id = ?").bind(isActive, newStatus, r.meme_id)
+      );
     }
 
     // Run in batches of 50 to stay well within D1 batch limits

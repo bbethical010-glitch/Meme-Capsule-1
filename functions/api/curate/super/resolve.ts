@@ -106,20 +106,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .run();
 
     // Update active state and status in memes table
+    // Superadmin Finalization is the authoritative gate:
+    // ONLY 'keep' becomes 'active' (is_active = 1).
+    // Everything else ('excluded', 'duplicate', 'review_later') becomes 'archived' (is_active = 0).
     const isActive = corpusStatus === "keep" ? 1 : 0;
-    const newStatus = corpusStatus === "excluded" ? "archived" : (corpusStatus === "keep" ? "active" : null);
+    const newStatus = corpusStatus === "keep" ? "active" : "archived";
 
-    if (newStatus) {
+    if (corpusStatus === "keep" && topics.length > 0) {
+      await env.DB.prepare(
+        "UPDATE memes SET is_active = ?, status = ?, tags = ?, category = COALESCE(?, category) WHERE id = ?"
+      )
+        .bind(isActive, newStatus, JSON.stringify(topics), topics[0] || null, memeId)
+        .run();
+    } else {
       await env.DB.prepare(
         "UPDATE memes SET is_active = ?, status = ? WHERE id = ?"
       )
         .bind(isActive, newStatus, memeId)
-        .run();
-    } else {
-      await env.DB.prepare(
-        "UPDATE memes SET is_active = ? WHERE id = ?"
-      )
-        .bind(isActive, memeId)
         .run();
     }
 

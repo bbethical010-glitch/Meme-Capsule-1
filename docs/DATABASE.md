@@ -159,7 +159,7 @@ Destructive actions use the meme ID stored on the report rather than trusting a
 browser-supplied target. The dashboard requires `ADMIN_API_TOKEN` and asks for
 confirmation before removing or blacklisting content.
 
-Public routes never use the admin token. They only return rows with `status = 'active'` and `is_active = 1`.
+Public routes (`/api/random-meme`, `/api/daily-meme`) never use the admin token. They only return rows with `status = 'active'`, `is_active = 1`, and an authoritative finalization in `meme_curation_final` with `corpus_status = 'keep'`. All unfinalized or excluded memes are maintained in `status = 'archived'` (`is_active = 0`) and are excluded at the SQL query level.
 
 ## Google Drive Workflow
 

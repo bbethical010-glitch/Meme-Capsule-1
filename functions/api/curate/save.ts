@@ -39,8 +39,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     // Determine user from session or explicit payload
-    const userId = sessionUser?.id || (body.user_id ? body.user_id.trim() : "judge1");
-    const userName = sessionUser?.display_name || (body.user_name ? body.user_name.trim() : "Judge");
+    const userId = sessionUser?.id || (body.user_id ? body.user_id.trim() : "user-judge1");
+    const userName = sessionUser?.display_name || (body.user_name && body.user_name.trim() !== "Judge" ? body.user_name.trim() : "Judge One");
 
     // Enforce taxonomy selection limits
     const rawTopics = Array.isArray(body.topics) ? body.topics.filter(Boolean) : [];

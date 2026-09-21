@@ -130,10 +130,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await env.DB.batch([
       env.DB.prepare("INSERT INTO ai_judge_processed (meme_id, run_id, user_id, decision, topics, tone, mechanisms, confidence, reasoning, raw_response, model, provider, tokens_used, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(memeId, runId, user.id, result.decision, JSON.stringify(result.topics), result.tone, JSON.stringify(result.humour_mechanisms), result.confidence, result.reasoning, rawText, config.model, config.provider, tokens, Date.now() - started),
-      env.DB.prepare(`INSERT INTO meme_curation (meme_id, user_id, user_name, corpus_status, topics, tone, humour_mechanisms, curator_note, reviewed_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(meme_id, user_id) DO UPDATE SET corpus_status = excluded.corpus_status, topics = excluded.topics, tone = excluded.tone, humour_mechanisms = excluded.humour_mechanisms, curator_note = excluded.curator_note, user_name = excluded.user_name, updated_at = excluded.updated_at`)
-        .bind(memeId, user.id, "AI Judge", result.decision, JSON.stringify(result.topics), result.tone, JSON.stringify(result.humour_mechanisms), result.reasoning, now, now),
       env.DB.prepare("UPDATE ai_judge_runs SET processed = processed + 1, succeeded = succeeded + 1 WHERE id = ? AND user_id = ?").bind(runId, user.id)
     ]);
     return json({ success: true, meme_id: memeId, decision: result.decision, topics: result.topics, tone: result.tone, humour_mechanisms: result.humour_mechanisms, confidence: result.confidence, reasoning: result.reasoning, tokens_used: tokens, duration_ms: Date.now() - started });

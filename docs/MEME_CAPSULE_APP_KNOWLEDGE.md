@@ -79,10 +79,10 @@ Meme Capsule was created as an explicit antidote to three modern internet proble
   4. The user can save to their offline **Meme Vault**, pin to themed **Mood Boards**, download losslessly to `Pictures/Meme Capsule` via native Android MediaStore, or share via the native Android share sheet.
   5. Navigating further is done via vertical gestures: **Swipe Up** drops the next meme, **Swipe Down** navigates back to session history.
 - **Internal Backend Flow:**
-  1. Incoming memes are ingested into Cloudflare D1 (`memes` table) and R2 storage.
-  2. Human judges log into `/curate` and categorize memes using rapid keyboard shortcuts (`K` Keep, `E` Exclude, `D` Duplicate, `L` Review Later).
+  1. Incoming memes are ingested into Cloudflare D1 (`memes` table) and R2 storage in an unfinalized `ARCHIVED` state (`is_active = 0`).
+  2. Human judges (`Judge One` through `Judge Five`) log into `/curate` and categorize memes using rapid keyboard shortcuts (`K` Keep, `E` Exclude, `D` Duplicate, `L` Review Later).
   3. If judge decisions diverge, the SuperAdmin dashboard arbitrates consensus into `meme_curation_final`.
-  4. Approved memes are served through `/api/random-meme` to the mobile client.
+  4. ONLY memes authoritatively resolved as `keep` by Superadmin become `ACTIVE` (`is_active = 1`) and can be served through `/api/random-meme` to the mobile client; all unfinalized memes remain `ARCHIVED` and are strictly excluded from public delivery.
   5. Inappropriate content reported by users lands in `/reports` for one-click archiving and blacklisting.
 
 ### Q5: What are all of its features?
@@ -144,7 +144,14 @@ Interaction is physical, tactile, and zero-friction:
 
 ### Q8: How does its backend work?
 The backend runs 100% serverlessly across Cloudflare's global edge network:
-1. **Delivery Pipeline:** When `/api/random-meme` is invoked, Cloudflare Pages queries D1 for an active, approved meme record (`corpus_status = 'keep'` / `status = 'approved'`).
+1. **Delivery Pipeline:** When `/api/random-meme` is invoked, Cloudflare Pages queries D1 with a strict database-level inner join on `meme_curation_final`:
+   ```sql
+   SELECT m.* FROM memes m
+   INNER JOIN meme_curation_final f ON m.id = f.meme_id
+   WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND m.random_key >= ?
+   ORDER BY m.random_key ASC LIMIT 1
+   ```
+   Any meme that is unfinalized, still in judging, in arbitration, or archived is mathematically impossible to retrieve via `/api/random-meme` or `/api/daily-meme`.
 2. **Telemetry Ingestion:** Client actions (view duration, skip, like, share, download) are enqueued into a client-side circular buffer and flushed periodically to `POST /api/events`.
 3. **Analytics Engine:** The background recalculation script (`/api/admin/analytics/recalculate`) aggregates raw events into normalized ranking tables (`meme_analytics`), computing percentile rankings for virality, retention, and engagement.
 4. **Moderation Pipeline:** User-reported memes trigger `POST /api/report`, populating `meme_reports`. Admins inspect flagged items via `/reports` to dismiss or blacklist them.
