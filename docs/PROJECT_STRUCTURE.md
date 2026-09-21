@@ -23,6 +23,8 @@ meme application/
 │   ├── CHANGELOG.md                                  # Version history
 │   ├── CLAUDE.md                                     # Development setup & commands guide
 │   ├── DATABASE.md                                   # Database and storage architecture docs
+│   ├── MEME_CAPSULE_APP_KNOWLEDGE.md                 # Master canonical product & architecture spec
+│   ├── PRIVACY_COOKIES_AND_DATA_FLOWS.md             # Privacy, cookies, Formspree, AdMob audit
 │   ├── PROJECT_STRUCTURE.md                          # This file
 │   └── README.md                                     # Project overview and setup guide
 ├── functions                                         # Cloudflare Pages Functions (serverless API)
@@ -43,22 +45,25 @@ meme application/
 │   ├── _headers                                      # Cloudflare Pages custom headers
 │   ├── icon.svg                                      # PWA icon
 │   ├── manifest.webmanifest                          # PWA manifest
-│   └── sw.js                                         # Service worker for offline support
+│   └── sw.js                                         # Service worker self-termination script
 ├── src                                               # Frontend source code
-│   ├── admin                                         # Admin dashboard
+│   ├── admin                                         # Admin dashboard (/admin)
 │   │   ├── admin.css                                 # Admin-specific styles
 │   │   └── AdminApp.tsx                              # Admin UI component
+│   ├── curate                                        # Curation & SuperAdmin portal (/curate)
+│   │   ├── curate.css                                # Curation Neo-Brutalist styles
+│   │   └── CurateApp.tsx                             # Multi-judge curation workbench
+│   ├── ai-judge                                      # AI Pre-Judge assisted loop (/ai-judge)
+│   ├── categorise                                    # Judge categorization portal (/categorise)
 │   ├── data                                          # Static data
 │   │   └── fallbackMemes.ts                          # Static fallback memes for offline/empty DB
 │   ├── lib                                           # Utility modules
 │   │   ├── adminApi.ts                               # Frontend → admin API client
 │   │   ├── adminCollection.ts                        # Local admin collection (localStorage)
-│   │   ├── localState.ts                             # Local device state (favorites, LOLs)
-│   │   ├── memeApi.ts                                # Frontend → public meme API client
-│   │   └── share.ts                                  # Share/save functionality
-│   ├── App.tsx                                       # Main app component — meme capsule UI
+│   │   ├── localState.ts                             # Local device state
+│   │   └── memeApi.ts                                # Frontend → public meme API client
+│   ├── base.css                                      # Minimal base reset for dark tools
 │   ├── main.tsx                                      # React entry point and router
-│   ├── styles.css                                    # Global styles and animations
 │   ├── types.ts                                      # TypeScript type definitions (Meme, Rarity, etc.)
 │   └── vite-env.d.ts                                 # Vite environment type augmentation
 ├── supabase                                          # OLD Supabase schema (being replaced by d1/)

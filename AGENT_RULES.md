@@ -11,6 +11,7 @@
 3. **Preserve Backward Compatibility**: Existing working functionality, API contracts, and user data structures must remain fully functional.
 4. **No Placeholders or Fake Code**: Every change must be functional, tested, and complete. Never leave `// TODO`, mock data replacements, or half-implemented features.
 5. **The Repository is the Source of Truth**: Treat workspace files, existing migrations, and markdown documentation as the persistent project memory. Never guess when information can be verified in the codebase.
+6. **Mandatory Documentation Synchronization**: Documentation is never optional. Every agent MUST update all affected Markdown documents in `docs/` and the workspace after every change, feature addition, or refactor. Never mark a task complete without keeping documentation fully synchronized.
 
 ---
 
@@ -100,13 +101,24 @@ If a test, build, or command fails:
 
 ---
 
-## 6. Documentation Synchronization
+## 6. Mandatory Markdown Documentation Synchronization
 
-After completing any non-trivial change, update the project's documentation:
-- Keep `walkthrough.md` updated with exact details of changes made, how to test them, and direct URLs.
-- Update `GEMINI.md` / `CLAUDE.md` if new routes, features, or environment variables were added.
-- Update `docs/` if database schema or API endpoints were modified.
-- Never document features that were not verified.
+> **CRITICAL RULE:** Documentation is a first-class deliverable. Every AI coding agent **MUST** keep all affected Markdown documentation files completely synchronized and accurate after **every change, feature addition, refactoring, or bugfix** in the codebase. Never leave a task marked complete without updating the documentation.
+
+### The Canonical Documentation Inventory to Keep Updated:
+1. **`docs/MEME_CAPSULE_APP_KNOWLEDGE.md`**: Master architectural & product knowledge reference. Update whenever features, concepts, workflows, or ecosystem responsibilities change.
+2. **`docs/PRIVACY_COOKIES_AND_DATA_FLOWS.md`**: Telemetry, cookies, analytics, subprocessors, and privacy compliance. Update whenever new third-party services, forms, cookies, SDKs, or data pipelines are modified.
+3. **`docs/DATABASE.md`**: Cloudflare D1 SQLite schemas, table migrations, column structures, and R2 media bucket configurations.
+4. **`docs/PROJECT_STRUCTURE.md`**: Directory maps, file layouts, component boundaries, and dependency mappings.
+5. **`docs/README.md` & root `README.md`**: High-level repository guides, active routes, and setup instructions.
+6. **`GEMINI.md` / `CLAUDE.md`**: AI context files, runtime configurations, and developer operating guidelines.
+7. **`AGENT_RULES.md`**: The permanent operating guide itself — update if workflow policies or protected areas evolve.
+8. **`walkthrough.md`**: Comprehensive record of changes made, files touched, testing commands executed, and verification results.
+
+### Rules for Documentation Maintenance:
+- **Never Claim Unverified Functionality:** The documentation must never state that a feature exists or works unless it was physically verified via code inspection, testing, or build validation.
+- **Surgical Accuracy:** Do not blindly copy-paste stale summaries. Update the specific tables, lists, and sections affected by the code change.
+- **Maintain Clear Separation:** Always preserve the distinction between **Public Mass-Audience Product** (Android APK `com.meme.capsule`, `memecapsule.wtf`) and **Developer / Internal Systems** (Cloudflare Edge, `/curate`, `/admin`, `/reports`).
 
 ---
 
@@ -114,14 +126,14 @@ After completing any non-trivial change, update the project's documentation:
 
 Before committing and pushing to git, confirm:
 - [ ] Did I implement exactly what was requested without touching unrelated features?
-- [ ] Are existing working features (Public app, Admin, Curator, API) unaffected?
+- [ ] Are existing working features (Public app, Admin, Curator, Reports, API) unaffected?
 - [ ] Did `npm run build` pass with 0 errors?
 - [ ] Did I remove all debug `console.log` statements, scratch files, and temporary artifacts?
-- [ ] Are the relevant markdown documentation files updated?
+- [ ] **Are all affected Markdown documentation files updated and synchronized?**
 - [ ] Is the git commit message clear, descriptive, and formatted with conventional commits (e.g. `feat: ...`, `fix: ...`, `docs: ...`)?
 
 ---
 
 ## 8. Summary Reminder
 
-> **Read First → Change Only What Is Needed → Protect Established Architecture → Build & Test → Keep Docs Synced.**
+> **Read First → Change Only What Is Needed → Protect Established Architecture → Build & Test → Keep All Markdown Docs Synced → Commit & Push.**

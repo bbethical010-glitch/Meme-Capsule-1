@@ -283,10 +283,11 @@ public class MainActivity extends BridgeActivity {
 
 ### 3.5 Public Landing & Promotional Site (`memecapsule.wtf`)
 The official public landing site hosts:
-- App identity showcase and high-resolution mockups.
-- Direct Google Play Store download link.
-- Web PWA preview mode.
-- Privacy policy, terms of service, and content moderation policies required for Google Play compliance.
+- **App Identity & Download Showcase:** Interactive 3D phone frames, live capsule preview, and direct Google Play download CTA.
+- **Contact & Feedback Form:** Direct HTTP POST integration powered by **Formspree** (`https://formspree.io/f/xwlenwzr`), collecting Name, Email, Subject, and Message forwarded directly to the developer mailbox (`bbethical010@gmail.com`).
+- **Web Analytics & Telemetry:** Standard Google Analytics 4 (`G-8VMD4ZNQQK`) loaded via Google Tag Manager (`gtag.js`), collecting anonymous site traffic metrics and setting first-party cookies (`_ga`, `_ga_8VMD4ZNQQK`).
+- **Zero Marketing Pixels or Newsletters:** No social tracking pixels (Meta, TikTok, Twitter) and no mailing lists (Mailchimp, ConvertKit) exist on the site.
+- **Privacy & Compliance Reference:** For complete regulatory mappings, cookie expirations, AdMob disclosures, and Google Play Data Safety guides, see [`docs/PRIVACY_COOKIES_AND_DATA_FLOWS.md`](./PRIVACY_COOKIES_AND_DATA_FLOWS.md).
 
 ### 3.6 Content Strategy & Copy Kit
 - **One-Sentence Pitch:** *Meme Capsule is a high-octane Android meme discovery app that delivers curated internet humor one tap at a time with zero algorithms and zero doomscrolling.*
