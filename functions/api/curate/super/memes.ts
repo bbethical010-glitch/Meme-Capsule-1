@@ -36,52 +36,6 @@ interface JudgeReviewRow {
   reviewed_at: string;
 }
 
-interface AIDecisionRow {
-  id: string;
-  meme_id: string;
-  category_label: string | null;
-  confidence: number | null;
-  raw_response: string | null;
-  reasoning: string | null;
-  model: string | null;
-  created_at: string;
-  error: string | null;
-}
-
-const parseAIResult = (row: AIDecisionRow) => {
-  let payload: Record<string, unknown> = {};
-  try {
-    const parsed = row.raw_response ? JSON.parse(row.raw_response) : {};
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      payload = parsed as Record<string, unknown>;
-    }
-  } catch {
-    payload = {};
-  }
-  const rawStatus = payload.corpus_status ?? payload.decision ?? row.category_label;
-  const status = typeof rawStatus === "string" ? rawStatus.trim().toLowerCase() : "";
-  const corpusStatus = ({
-    keep: "keep", kept: "keep", exclude: "excluded", excluded: "excluded",
-    duplicate: "duplicate", duplicates: "duplicate", later: "review_later",
-    "review later": "review_later", review_later: "review_later"
-  } as Record<string, string>)[status] || null;
-  const arrayValue = (value: unknown): string[] =>
-    Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-  return {
-    corpus_status: corpusStatus,
-    topics: arrayValue(payload.topics),
-    tone: typeof payload.tone === "string" ? payload.tone : null,
-    humour_mechanisms: arrayValue(payload.humour_mechanisms),
-    confidence: typeof payload.confidence === "number"
-      ? (payload.confidence > 1 ? payload.confidence / 100 : payload.confidence)
-      : row.confidence,
-    reasoning: typeof payload.reasoning === "string" ? payload.reasoning : row.reasoning,
-    model: row.model,
-    updated_at: row.created_at,
-    error: row.error
-  };
-};
-
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
     await ensureCurationTables(env.DB);
@@ -148,7 +102,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const memes = memeRows || [];
     const memeIds = memes.map((m) => m.id);
 
-    // Fetch all judge reviews for these memes
+    // Fetch all judge reviews for these memes (Human judges only)
     let reviews: JudgeReviewRow[] = [];
     if (memeIds.length > 0) {
       const placeholders = memeIds.map(() => "?").join(",");
@@ -158,22 +112,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           topics, tone, humour_mechanisms, curator_note, reviewed_at
         FROM meme_curation
         WHERE meme_id IN (${placeholders})
+          AND user_name NOT IN ('AI Judge', 'Judge')
         ORDER BY reviewed_at ASC
       `).bind(...memeIds).all<JudgeReviewRow>();
       reviews = reviewResults || [];
-    }
-
-    let aiDecisions: AIDecisionRow[] = [];
-    if (memeIds.length > 0) {
-      const placeholders = memeIds.map(() => "?").join(",");
-      const { results: aiResults } = await env.DB.prepare(`
-        SELECT id, meme_id, category_label, confidence, raw_response,
-               reasoning, model, created_at, error
-        FROM ai_cat_decisions
-        WHERE meme_id IN (${placeholders}) AND error IS NULL
-        ORDER BY created_at DESC, id DESC
-      `).bind(...memeIds).all<AIDecisionRow>();
-      aiDecisions = aiResults || [];
     }
 
     const reviewsByMeme = new Map<string, JudgeReviewRow[]>();
@@ -183,17 +125,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       }
       reviewsByMeme.get(r.meme_id)!.push(r);
     }
-    const aiByMeme = new Map<string, ReturnType<typeof parseAIResult>>();
-    for (const decision of aiDecisions) {
-      if (!aiByMeme.has(decision.meme_id)) {
-        aiByMeme.set(decision.meme_id, parseAIResult(decision));
-      }
-    }
 
     const data = memes.map((m) => {
       const fullUrl = m.image_url || (m.storage_path && publicBase ? `${publicBase}/${m.storage_path.replace(/^\/+/, "")}` : "") || "";
       const memeReviews = reviewsByMeme.get(m.id) || [];
-      const ai = aiByMeme.get(m.id);
 
       // Determine consensus state
       let consensusStatus = "unreviewed";
@@ -257,17 +192,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         consensus_status: consensusStatus,
         judges_count: memeReviews.length,
         judges: formattedReviews,
-        ai_judge: ai ? {
-          corpus_status: ai.corpus_status as "keep" | "excluded" | "duplicate" | "review_later" | null,
-          topics: ai.topics,
-          tone: ai.tone,
-          humour_mechanisms: ai.humour_mechanisms,
-          confidence: ai.confidence === null ? null : Number(ai.confidence),
-          reasoning: ai.reasoning,
-          model: ai.model,
-          updated_at: ai.updated_at,
-          error: ai.error
-        } : null,
+        ai_judge: null,
         final_decision: m.final_status ? {
           corpus_status: m.final_status,
           duplicate_of: m.final_duplicate_of,

@@ -84,11 +84,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if (adminError) return adminError;
 
   const { results } = await env.DB.prepare(
-    "SELECT * FROM memes ORDER BY uploaded_at DESC"
-  ).all<D1MemeRow>();
+    `SELECT m.*, f.corpus_status as final_status
+     FROM memes m
+     LEFT JOIN meme_curation_final f ON m.id = f.meme_id
+     ORDER BY m.uploaded_at DESC`
+  ).all<D1MemeRow & { final_status?: string | null }>();
 
   return json({
-    memes: results.map((row: D1MemeRow) => normalizeRow(env, row)),
+    memes: results.map((row) => ({
+      ...normalizeRow(env, row),
+      final_status: row.final_status || null,
+      is_finalized_keep: row.final_status === "keep"
+    })),
     config: {
       hasR2PublicUrl: Boolean(env.R2_PUBLIC_URL),
       hasDatabase: Boolean(env.DB)
@@ -104,6 +111,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const payload = await parsePayload<SavePayload>(request);
     const row = toD1Row(payload.meme || {});
+
+    // Superadmin Gate: Cannot be ACTIVE unless finalized as 'keep' in meme_curation_final
+    if (row.status === "active") {
+      const finalRes = await env.DB.prepare(
+        "SELECT corpus_status FROM meme_curation_final WHERE meme_id = ?"
+      ).bind(row.id).first<{ corpus_status: string }>();
+
+      if (!finalRes || finalRes.corpus_status !== "keep") {
+        return json(
+          { error: "Cannot set status to ACTIVE: This meme has not been authoritatively resolved and finalized as KEEP by Superadmin in the Curator Command Center." },
+          { status: 400 }
+        );
+      }
+    }
 
     await env.DB.prepare(
       `INSERT INTO memes (id, title, image_url, storage_path, source_link, category, tags, rarity, status, media_type, input_method, is_active, rights_note, share_text, random_key)
@@ -137,6 +158,20 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     const row = toD1Row(payload.meme || {});
+
+    // Superadmin Gate: Cannot be ACTIVE unless finalized as 'keep' in meme_curation_final
+    if (row.status === "active") {
+      const finalRes = await env.DB.prepare(
+        "SELECT corpus_status FROM meme_curation_final WHERE meme_id = ?"
+      ).bind(originalId).first<{ corpus_status: string }>();
+
+      if (!finalRes || finalRes.corpus_status !== "keep") {
+        return json(
+          { error: "Cannot set status to ACTIVE: This meme has not been authoritatively resolved and finalized as KEEP by Superadmin in the Curator Command Center." },
+          { status: 400 }
+        );
+      }
+    }
 
     await env.DB.prepare(
       `UPDATE memes SET

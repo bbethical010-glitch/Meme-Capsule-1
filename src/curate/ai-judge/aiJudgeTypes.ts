@@ -20,13 +20,39 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
     defaultModel: "meta/llama-3.2-11b-vision-instruct",
     recommendedModels: [
       "meta/llama-3.2-11b-vision-instruct",
-      "microsoft/phi-3-vision-128k-instruct",
       "meta/muse-glimmer-30b",
-      "nvidia/neva-22b",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "microsoft/phi-3-vision-128k-instruct",
       "meta/llama-3.2-90b-vision-instruct"
     ],
     description: "NVIDIA hosted inference. 1,000 free API credits upon signup at build.nvidia.com.",
     keyHelpUrl: "https://build.nvidia.com"
+  },
+  {
+    id: "gemini",
+    name: "Google AI Studio",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-2.0-flash",
+    recommendedModels: [
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+      "gemini-2.0-flash-lite-preview-02-05"
+    ],
+    description: "Best-in-class pop culture, slang and meme context. Free tier 15 RPM. Compatible OpenAI endpoint.",
+    keyHelpUrl: "https://aistudio.google.com/apikey"
+  },
+  {
+    id: "groq",
+    name: "Groq Cloud (Ultra Fast)",
+    baseUrl: "https://api.groq.com/openai/v1",
+    defaultModel: "llama-3.2-11b-vision-preview",
+    recommendedModels: [
+      "llama-3.2-11b-vision-preview",
+      "llama-3.2-90b-vision-preview"
+    ],
+    description: "Sub-second LPU inference. Note: Groq strictly requires vision models (llama-3.2 vision) for image inputs.",
+    keyHelpUrl: "https://console.groq.com/keys"
   },
   {
     id: "openrouter",
@@ -41,30 +67,6 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
     ],
     description: "Aggregator supporting free Gemini, Qwen-VL, Llama Vision, and Kimi K3.",
     keyHelpUrl: "https://openrouter.ai/keys"
-  },
-  {
-    id: "gemini",
-    name: "Google AI Studio",
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    defaultModel: "gemini-2.0-flash",
-    recommendedModels: [
-      "gemini-2.0-flash",
-      "gemini-1.5-flash"
-    ],
-    description: "Best-in-class pop culture, slang and meme context. Free tier 15 RPM.",
-    keyHelpUrl: "https://aistudio.google.com/apikey"
-  },
-  {
-    id: "groq",
-    name: "Groq Cloud (Ultra Fast)",
-    baseUrl: "https://api.groq.com/openai/v1",
-    defaultModel: "llama-3.2-11b-vision-preview",
-    recommendedModels: [
-      "llama-3.2-11b-vision-preview",
-      "llama-3.2-90b-vision-preview"
-    ],
-    description: "Sub-second LPU inference for ultra-fast continuous judging.",
-    keyHelpUrl: "https://console.groq.com/keys"
   },
   {
     id: "custom",
@@ -90,6 +92,7 @@ export interface JudgeAiPreset {
   base_url: string;
   api_key: string;
   model: string;
+  models: string[];
   settings?: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
@@ -107,6 +110,7 @@ export interface AiJudgeConfig {
   lowConfidenceFallback: "review_later" | "excluded";
   confidenceThreshold: number; // e.g. 0.6
   activePresetId?: string | null;
+  customInstructions?: string; // Pre-build batch instructions for AI judge
 }
 
 export const DEFAULT_AI_JUDGE_CONFIG: AiJudgeConfig = {
@@ -120,7 +124,8 @@ export const DEFAULT_AI_JUDGE_CONFIG: AiJudgeConfig = {
   batchCount: 25,
   lowConfidenceFallback: "review_later",
   confidenceThreshold: 0.6,
-  activePresetId: null
+  activePresetId: null,
+  customInstructions: ""
 };
 
 export interface AiJudgeDecision {
@@ -138,6 +143,7 @@ export interface AiJudgeDecision {
 export type AiJudgeLoopState =
   | "idle"
   | "analyzing"
+  | "retrying"
   | "previewing"
   | "saving"
   | "paused"

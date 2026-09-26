@@ -26,42 +26,6 @@ interface CurationRow {
   corpus_status: string;
 }
 
-interface AICountRow {
-  total_reviewed: number;
-  kept: number;
-  excluded: number;
-  duplicates: number;
-  review_later: number;
-}
-
-interface AIDecisionRow {
-  id: string;
-  meme_id: string;
-  category_label: string | null;
-  raw_response: string | null;
-  created_at: string;
-  error: string | null;
-}
-
-function getAIDecision(row: AIDecisionRow): string | null {
-  let payload: Record<string, unknown> = {};
-  try {
-    const parsed = row.raw_response ? JSON.parse(row.raw_response) : {};
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      payload = parsed as Record<string, unknown>;
-    }
-  } catch {
-    payload = {};
-  }
-  const raw = payload.corpus_status ?? payload.decision ?? row.category_label;
-  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-  return ({
-    keep: "keep", kept: "keep", exclude: "excluded", excluded: "excluded",
-    duplicate: "duplicate", duplicates: "duplicate", later: "review_later",
-    "review later": "review_later", review_later: "review_later"
-  } as Record<string, string>)[value] || null;
-}
-
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
     await ensureCurationTables(env.DB);
@@ -87,7 +51,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       resolvedCount = 0;
     }
 
-    // 3. Per-judge progress breakdown
+    // 3. Per-judge progress breakdown (Active human judges only)
     const { results: judgeResults } = await env.DB.prepare(`
       SELECT 
         user_id,
@@ -99,42 +63,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         SUM(CASE WHEN corpus_status = 'review_later' THEN 1 ELSE 0 END) as review_later,
         MAX(reviewed_at) as last_active
       FROM meme_curation
+      WHERE user_name NOT IN ('AI Judge', 'Judge')
       GROUP BY user_id, user_name
       ORDER BY total_reviewed DESC
     `).all<JudgeCountRow>();
 
     const judges = judgeResults || [];
 
-    let aiJudge: AICountRow = {
-      total_reviewed: 0,
-      kept: 0,
-      excluded: 0,
-      duplicates: 0,
-      review_later: 0
-    };
-    try {
-      const { results } = await env.DB.prepare(`
-        SELECT id, meme_id, category_label, raw_response, created_at, error
-        FROM ai_cat_decisions
-        WHERE error IS NULL
-        ORDER BY created_at DESC, id DESC
-      `).all<AIDecisionRow>();
-      for (const row of results || []) {
-        aiJudge.total_reviewed += 1;
-        const status = getAIDecision(row);
-        if (status === "keep") aiJudge.kept += 1;
-        else if (status === "excluded") aiJudge.excluded += 1;
-        else if (status === "duplicate") aiJudge.duplicates += 1;
-        else if (status === "review_later") aiJudge.review_later += 1;
-      }
-    } catch {
-      // AI storage is optional; human progress must remain available.
-    }
-
-    // 4. Consensus & disagreement analysis across multi-judge reviews
+    // 4. Consensus & disagreement analysis across multi-judge reviews (Human judges only)
     const { results: allReviews } = await env.DB.prepare(`
       SELECT meme_id, user_id, corpus_status
       FROM meme_curation
+      WHERE user_name NOT IN ('AI Judge', 'Judge')
     `).all<CurationRow>();
 
     const reviews = allReviews || [];
@@ -182,8 +122,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         conflicts,
         total_with_reviews: reviewedMemeCount
       },
-      judges,
-      ai_judge: aiJudge
+      judges
     });
   } catch (err: unknown) {
     if (err instanceof Response) return err;

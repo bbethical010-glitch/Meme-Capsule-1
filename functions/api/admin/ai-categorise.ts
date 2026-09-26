@@ -87,49 +87,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     )
     .run()
 
-  /*
-   * ai_cat_decisions is optional.
-   * If this table exists, store the complete decision.
-   */
 
-  try {
-    await env.DB.prepare(`
-      INSERT INTO ai_cat_decisions
-        (
-          meme_id,
-          image_url,
-          category_id,
-          category_label,
-          confidence,
-          reasoning,
-          raw_response,
-          model,
-          tokens_used,
-          processing_ms,
-          error
-        )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-      .bind(
-        resolvedMemeId,
-        image_url || meme.image_url || '',
-        category_id || null,
-        category_id || null,
-        confidence,
-        reasoning,
-        raw_response,
-        model,
-        tokens_used,
-        processing_ms,
-        error
-      )
-      .run()
-  } catch {
-    /*
-     * Don't fail the entire categorisation if the optional
-     * decision-history table isn't available.
-     */
-  }
 
   return Response.json({
     success: true,

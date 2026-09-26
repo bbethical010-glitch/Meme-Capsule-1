@@ -6,7 +6,7 @@
  */
 
 import type { PagesFunction } from "../../_shared/pages";
-import { json, type Env } from "../../_shared/d1r2";
+import { json, handleD1Error, type Env } from "../../_shared/d1r2";
 import { validateSession } from "../../_shared/catAuth";
 import { ensureCurationTables } from "../../_shared/curateDb";
 
@@ -39,8 +39,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     // Determine user from session or explicit payload
-    const userId = sessionUser?.id || (body.user_id ? body.user_id.trim() : "judge1");
-    const userName = sessionUser?.display_name || (body.user_name ? body.user_name.trim() : "Judge");
+    const userId = sessionUser?.id || (body.user_id ? body.user_id.trim() : "user-judge1");
+    const userName = sessionUser?.display_name || (body.user_name && body.user_name.trim() !== "Judge" ? body.user_name.trim() : "Judge One");
 
     // Enforce taxonomy selection limits
     const rawTopics = Array.isArray(body.topics) ? body.topics.filter(Boolean) : [];
@@ -104,8 +104,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       humour_mechanisms: mechanisms
     });
   } catch (err: unknown) {
-    if (err instanceof Response) return err;
-    const msg = err instanceof Error ? err.message : "Error saving curation decision";
-    return json({ error: msg }, { status: 500 });
+    return handleD1Error(err, "Error saving curation decision");
   }
 };

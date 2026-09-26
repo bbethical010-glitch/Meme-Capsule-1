@@ -1,6 +1,7 @@
 import type { PagesFunction } from "../../_shared/pages";
 import { json, type Env } from "../../_shared/d1r2";
 import { requireAiJudgeAuth } from "../../_shared/aiJudgeAuth";
+import { encryptApiKey, decryptApiKey } from "../../_shared/crypto";
 
 const TOPICS = ["Everyday Life", "Work / Education", "Relationships", "Family", "Politics / Society", "Internet Culture", "Pop Culture", "Gaming", "Animals", "Food", "Technology", "Other"];
 const TONES = ["Wholesome", "Dark", "Chaotic", "Cynical", "Awkward", "Neutral"];
@@ -68,6 +69,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const run = await env.DB.prepare("SELECT id, status FROM ai_judge_runs WHERE id = ? AND user_id = ?").bind(runId, user.id).first<{ id: string; status: string }>();
   if (!run || run.status !== "running") return fail("Run is not active.");
   if (!config?.api_key) return fail("AI provider configuration is missing.");
+
+  const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
+  const plainApiKey = await decryptApiKey(config.api_key, secretSeed);
+  if (!plainApiKey) return fail("AI provider configuration key is invalid.");
+
+  // Auto-encrypt legacy plaintext key on use if present
+  if (!config.api_key.startsWith("enc:v1:")) {
+    const encrypted = await encryptApiKey(config.api_key, secretSeed);
+    await env.DB.prepare(
+      "UPDATE ai_judge_config SET api_key = ? WHERE user_id = ?"
+    ).bind(encrypted, user.id).run().catch(() => undefined);
+  }
+
   try {
     const imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(30000) });
     if (!imageResponse.ok) throw new Error(`Image request failed with ${imageResponse.status}.`);
@@ -87,7 +101,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         console.log(`[ai-judge] AI call starting: provider=${config.provider}, model=${config.model}, attempt=${attempt}/${retries}, meme_id=${memeId}`);
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { Authorization: `Bearer ${config.api_key}`, "Content-Type": "application/json", Accept: "application/json" },
+          headers: { Authorization: `Bearer ${plainApiKey}`, "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ model: config.model, temperature: config.temperature, max_tokens: 400, stream: false, messages: [{ role: "user", content }], ...(config.provider === "openai" ? { response_format: { type: "json_object" } } : {}) }),
           signal: AbortSignal.timeout(25000)
         });
@@ -116,10 +130,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await env.DB.batch([
       env.DB.prepare("INSERT INTO ai_judge_processed (meme_id, run_id, user_id, decision, topics, tone, mechanisms, confidence, reasoning, raw_response, model, provider, tokens_used, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(memeId, runId, user.id, result.decision, JSON.stringify(result.topics), result.tone, JSON.stringify(result.humour_mechanisms), result.confidence, result.reasoning, rawText, config.model, config.provider, tokens, Date.now() - started),
-      env.DB.prepare(`INSERT INTO meme_curation (meme_id, user_id, user_name, corpus_status, topics, tone, humour_mechanisms, curator_note, reviewed_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(meme_id, user_id) DO UPDATE SET corpus_status = excluded.corpus_status, topics = excluded.topics, tone = excluded.tone, humour_mechanisms = excluded.humour_mechanisms, curator_note = excluded.curator_note, user_name = excluded.user_name, updated_at = excluded.updated_at`)
-        .bind(memeId, user.id, "AI Judge", result.decision, JSON.stringify(result.topics), result.tone, JSON.stringify(result.humour_mechanisms), result.reasoning, now, now),
       env.DB.prepare("UPDATE ai_judge_runs SET processed = processed + 1, succeeded = succeeded + 1 WHERE id = ? AND user_id = ?").bind(runId, user.id)
     ]);
     return json({ success: true, meme_id: memeId, decision: result.decision, topics: result.topics, tone: result.tone, humour_mechanisms: result.humour_mechanisms, confidence: result.confidence, reasoning: result.reasoning, tokens_used: tokens, duration_ms: Date.now() - started });

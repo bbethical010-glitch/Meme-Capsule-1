@@ -76,6 +76,20 @@ Core fields:
 
 Only records with `status = 'active'` and `is_active = 1` should be returned to users.
 
+### Reporting System Table: `meme_reports`
+- `id`: Auto-incrementing integer primary key.
+- `meme_id`: ID of the reported meme (if known).
+- `meme_url`: URL of the reported meme.
+- `meme_title`: Title of the reported meme.
+- `author`: Name or identifier of the reporting user.
+- `source`: Source of the report (e.g. "Meme Capsule").
+- `reason`: Primary reason for the report.
+- `details`: Optional extra details provided by the user.
+- `device_id`: Device identifier of the reporting user.
+- `status`: State of the report (`pending`, `resolved`, `dismissed`).
+- `created_at`: Creation timestamp.
+- `updated_at`: Last updated timestamp.
+
 ## API Flow
 
 Public random meme:
@@ -145,7 +159,7 @@ Destructive actions use the meme ID stored on the report rather than trusting a
 browser-supplied target. The dashboard requires `ADMIN_API_TOKEN` and asks for
 confirmation before removing or blacklisting content.
 
-Public routes never use the admin token. They only return rows with `status = 'active'` and `is_active = 1`.
+Public routes (`/api/random-meme`, `/api/daily-meme`) never use the admin token. They only return rows with `status = 'active'`, `is_active = 1`, and an authoritative finalization in `meme_curation_final` with `corpus_status = 'keep'`. All unfinalized or excluded memes are maintained in `status = 'archived'` (`is_active = 0`) and are excluded at the SQL query level.
 
 ## Google Drive Workflow
 

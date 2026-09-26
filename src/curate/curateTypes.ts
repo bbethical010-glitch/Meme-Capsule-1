@@ -45,6 +45,7 @@ export interface CuratorUser {
   username: string;
   display_name: string;
   role: "judge" | "superadmin";
+  has_api_password?: boolean;
 }
 
 export interface CuratedMemeData {

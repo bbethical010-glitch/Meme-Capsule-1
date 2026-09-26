@@ -1,12 +1,23 @@
 import type { PagesFunction } from "../../_shared/pages";
 import { json, type Env } from "../../_shared/d1r2";
 import { requireAiJudgeAuth } from "../../_shared/aiJudgeAuth";
+import { encryptApiKey } from "../../_shared/crypto";
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const user = await requireAiJudgeAuth(request, env);
   const config = await env.DB.prepare(
     "SELECT provider, model, api_key FROM ai_judge_config WHERE user_id = ?"
   ).bind(user.id).first<{ provider: string; model: string; api_key: string }>();
+
+  // Auto-encrypt legacy plaintext key on read if present
+  if (config?.api_key && !config.api_key.startsWith("enc:v1:")) {
+    const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
+    const encrypted = await encryptApiKey(config.api_key, secretSeed);
+    await env.DB.prepare(
+      "UPDATE ai_judge_config SET api_key = ? WHERE user_id = ?"
+    ).bind(encrypted, user.id).run().catch(() => undefined);
+  }
+
   return json({ provider: config?.provider || "nvidia", model: config?.model || "meta/llama-3.2-11b-vision-instruct", has_api_key: Boolean(config?.api_key) });
 };
 
@@ -21,6 +32,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const existing = await env.DB.prepare("SELECT api_key FROM ai_judge_config WHERE user_id = ?").bind(user.id).first<{ api_key: string }>();
   const nextKey = apiKey || existing?.api_key;
   if (!nextKey) return json({ error: "api_key is required." }, { status: 400 });
+
+  const secretSeed = env.ADMIN_API_TOKEN || "meme-capsule-secret-token";
+  const encryptedKey = await encryptApiKey(nextKey, secretSeed);
+
   await env.DB.prepare(`
     INSERT INTO ai_judge_config (user_id, provider, model, api_key, max_retries, temperature, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -31,6 +46,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       max_retries = excluded.max_retries,
       temperature = excluded.temperature,
       updated_at = excluded.updated_at
-  `).bind(user.id, provider, model, nextKey, maxRetries, Number.isFinite(temperature) ? temperature : 0, new Date().toISOString()).run();
+  `).bind(user.id, provider, model, encryptedKey, maxRetries, Number.isFinite(temperature) ? temperature : 0, new Date().toISOString()).run();
   return json({ provider, model, has_api_key: true });
 };

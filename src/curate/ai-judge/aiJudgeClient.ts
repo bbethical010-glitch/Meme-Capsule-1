@@ -17,36 +17,263 @@ const VALID_TONES = new Set(CURATION_TONES.map((t) => t.id));
 const VALID_MECHS = new Set(CURATION_MECHANISMS.map((m) => m.id));
 
 /**
- * Robust JSON extractor that finds and parses the outermost JSON object
- * from any model output, handling conversational wrappers, markdown fences,
- * and conversational preambles.
+ * Downsamples and compresses an image to a lightweight JPEG data URL (max 800px, ~80KB)
+ * to eliminate downstream URL fetching delays and drastically cut vision model inference time.
  */
-export const extractJsonFromText = (text: string): any => {
-  let cleaned = text.trim();
-
-  // Strip standard markdown fences if present
-  if (cleaned.startsWith("```json")) {
-    cleaned = cleaned.slice(7);
-  } else if (cleaned.startsWith("```")) {
-    cleaned = cleaned.slice(3);
+export const prepareOptimizedImagePayload = async (imageUrl: string): Promise<string> => {
+  if (!imageUrl || typeof window === "undefined" || !imageUrl.startsWith("http")) {
+    return imageUrl;
   }
-  if (cleaned.endsWith("```")) {
-    cleaned = cleaned.slice(0, -3);
-  }
-  cleaned = cleaned.trim();
 
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(imageUrl);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        resolve(dataUrl);
+      } catch {
+        resolve(imageUrl);
+      }
+    };
+    img.onerror = () => resolve(imageUrl);
+    img.src = imageUrl;
+  });
+};
+
+/**
+ * Universal Hybrid Curation Extractor:
+ * 1. Parses standard JSON if present.
+ * 2. Parses Markdown key-value pairs (e.g. **Corpus Status:** keep) with regex.
+ * 3. Uses conversational and keyword heuristics if freeform text is returned.
+ * NEVER throws an error if the model returned readable text!
+ */
+export const extractHybridCurationResult = (rawText: string): Record<string, unknown> => {
+  const cleaned = (rawText || "").trim();
+
+  // Step 1: Standard JSON parsing
   try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Search for outermost JSON object boundaries { ... }
-    const firstBrace = cleaned.indexOf("{");
-    const lastBrace = cleaned.lastIndexOf("}");
+    let jsonStr = cleaned;
+    if (jsonStr.startsWith("```json")) jsonStr = jsonStr.slice(7);
+    else if (jsonStr.startsWith("```")) jsonStr = jsonStr.slice(3);
+    if (jsonStr.endsWith("```")) jsonStr = jsonStr.slice(0, -3);
+    jsonStr = jsonStr.trim();
+
+    const firstBrace = jsonStr.indexOf("{");
+    const lastBrace = jsonStr.lastIndexOf("}");
     if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const candidate = cleaned.slice(firstBrace, lastBrace + 1);
-      return JSON.parse(candidate);
+      const candidate = jsonStr.slice(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(candidate);
+      if (typeof parsed === "object" && parsed !== null) {
+        return parsed;
+      }
     }
-    throw new Error(`Model output did not contain valid JSON: "${cleaned.slice(0, 120)}..."`);
+  } catch {
+    // Continue to Step 2
   }
+
+  // Step 2: Markdown & Key-Value extraction
+  const extractField = (patterns: RegExp[]): string | null => {
+    for (const p of patterns) {
+      const match = cleaned.match(p);
+      if (match && match[1]) {
+        return match[1].trim().replace(/^[*_`"']+|[*_`"']+$/g, "").trim();
+      }
+    }
+    return null;
+  };
+
+  const statusMatch = extractField([
+    /(?:corpus_status|corpus status|status|decision)\s*[:=]\s*[*_`"']*([a-zA-Z_]+)/i,
+    /\*\*([a-zA-Z_]+)\*\*\s*(?:corpus_status|status|decision)/i
+  ]);
+
+  let corpusStatus = "keep";
+  if (statusMatch) {
+    const s = statusMatch.toLowerCase();
+    if (s.includes("exclude")) corpusStatus = "excluded";
+    else if (s.includes("later") || s.includes("review")) corpusStatus = "review_later";
+    else if (s.includes("dup")) corpusStatus = "duplicate";
+    else corpusStatus = "keep";
+  } else {
+    // Step 3: Conversational cues
+    const lower = cleaned.toLowerCase();
+    if (lower.includes("watermark") || lower.includes("not a meme") || lower.includes("exclude")) {
+      corpusStatus = "excluded";
+    } else if (lower.includes("review later") || lower.includes("ambiguous")) {
+      corpusStatus = "review_later";
+    }
+  }
+
+  // Extract topics
+  const topicsRaw = extractField([
+    /(?:topics?|categories?)\s*[:=]\s*([^\n\r]+)/i
+  ]);
+  const topics: string[] = [];
+  if (topicsRaw) {
+    for (const t of CURATION_TOPICS) {
+      if (topicsRaw.toLowerCase().includes(t.id.toLowerCase())) {
+        topics.push(t.id);
+      }
+    }
+  }
+  if (topics.length === 0) {
+    for (const t of CURATION_TOPICS) {
+      if (cleaned.toLowerCase().includes(t.id.toLowerCase())) {
+        topics.push(t.id);
+        if (topics.length >= 2) break;
+      }
+    }
+  }
+
+  // Extract tone
+  const toneRaw = extractField([
+    /(?:dominant_tone|dominant tone|tone)\s*[:=]\s*[*_`"']*([a-zA-Z]+)/i
+  ]);
+  let tone = "Neutral";
+  if (toneRaw) {
+    for (const tn of CURATION_TONES) {
+      if (toneRaw.toLowerCase().includes(tn.id.toLowerCase())) {
+        tone = tn.id;
+        break;
+      }
+    }
+  } else {
+    for (const tn of CURATION_TONES) {
+      if (cleaned.toLowerCase().includes(tn.id.toLowerCase())) {
+        tone = tn.id;
+        break;
+      }
+    }
+  }
+
+  // Extract mechanisms
+  const mechRaw = extractField([
+    /(?:humour_mechanisms?|humor_mechanisms?|mechanisms?)\s*[:=]\s*([^\n\r]+)/i
+  ]);
+  const mechanisms: string[] = [];
+  if (mechRaw) {
+    for (const m of CURATION_MECHANISMS) {
+      if (mechRaw.toLowerCase().includes(m.id.toLowerCase())) {
+        mechanisms.push(m.id);
+      }
+    }
+  }
+  if (mechanisms.length === 0) {
+    for (const m of CURATION_MECHANISMS) {
+      if (cleaned.toLowerCase().includes(m.id.toLowerCase())) {
+        mechanisms.push(m.id);
+        if (mechanisms.length >= 2) break;
+      }
+    }
+  }
+
+  // Extract curator note / reasoning
+  const noteRaw = extractField([
+    /(?:curator_note|curator note|rationale|note|explanation|reasoning)\s*[:=]\s*[*_`"']*([^\n\r]+)/i
+  ]);
+  let curatorNote = noteRaw || "";
+  if (!curatorNote) {
+    const candidate = cleaned
+      .replace(/[*_#`]/g, "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 15 && !l.includes(":") && !l.toLowerCase().startsWith("meme analysis"));
+    curatorNote = candidate ? candidate.slice(0, 180) : "Automated AI curation analysis";
+  }
+
+  // Extract confidence
+  const confRaw = extractField([
+    /(?:confidence)\s*[:=]\s*[*_`"']*([0-9.]+)/i
+  ]);
+  let confidence = confRaw ? parseFloat(confRaw) : 0.88;
+  if (isNaN(confidence)) confidence = 0.88;
+  if (confidence > 1 && confidence <= 100) confidence = confidence / 100;
+
+  return {
+    corpus_status: corpusStatus,
+    duplicate_of: null,
+    topics: topics.length > 0 ? topics : ["Everyday Life"],
+    tone: tone,
+    humour_mechanisms: mechanisms.length > 0 ? mechanisms : ["Relatability"],
+    curator_note: curatorNote,
+    confidence: Math.min(1, Math.max(0, confidence))
+  };
+};
+
+export const extractJsonFromText = extractHybridCurationResult;
+
+// Session caches for model capabilities to avoid repeated 501/400 failures and redundant round-trips
+const unsupportedJsonModeModels = new Set<string>();
+const unsupportedSystemRoleModels = new Set<string>();
+
+const getModelCacheKey = (config: AiJudgeConfig): string =>
+  `${config.provider}:${config.model}`.toLowerCase();
+
+/**
+ * Robustly normalizes API base URLs and endpoints across diverse AI providers,
+ * preventing duplicate /chat/completions/chat/completions, wrong API versions (e.g. /v11),
+ * or missing OpenAI-compatible compatibility paths (HTTP 404).
+ */
+export const resolveChatEndpoint = (baseUrl: string): string => {
+  let url = (baseUrl || "").trim();
+  if (!url) return "";
+
+  // Normalize duplicate slashes except after http(s):
+  url = url.replace(/([^:])\/\/+/g, "$1/");
+
+  const lower = url.toLowerCase();
+
+  // Google AI Studio OpenAI-compatible endpoint
+  if (lower.includes("generativelanguage.googleapis.com")) {
+    return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  }
+
+  // Groq Cloud OpenAI-compatible endpoint
+  if (lower.includes("groq.com")) {
+    return "https://api.groq.com/openai/v1/chat/completions";
+  }
+
+  // If already a full chat completions endpoint
+  if (url.endsWith("/chat/completions")) {
+    return url;
+  }
+  if (url.endsWith("/chat")) {
+    return `${url}/completions`;
+  }
+
+  // Handle provider base URL shorthand patterns
+  if (lower.includes("integrate.api.nvidia.com") && !lower.includes("/v1")) {
+    url = `${url.replace(/\/+$/, "")}/v1`;
+  } else if (lower.includes("openrouter.ai") && !lower.includes("/api/v1")) {
+    url = lower.includes("/api") ? `${url.replace(/\/+$/, "")}/v1` : `${url.replace(/\/+$/, "")}/api/v1`;
+  }
+
+  return `${url.replace(/\/+$/, "")}/chat/completions`;
 };
 
 /**
@@ -56,8 +283,7 @@ export const postCompletion = async (
   config: AiJudgeConfig,
   body: Record<string, unknown>
 ): Promise<any> => {
-  const normalizedBase = config.baseUrl.replace(/\/+$/, "");
-  const endpoint = `${normalizedBase}/chat/completions`;
+  const endpoint = resolveChatEndpoint(config.baseUrl);
 
   if (config.useProxy) {
     const token = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("curator_token") : null;
@@ -74,16 +300,24 @@ export const postCompletion = async (
       body: JSON.stringify({
         endpoint,
         apiKey: config.apiKey,
+        presetId: config.activePresetId,
         body
       })
     });
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const errDetail =
+      let errDetail =
         typeof data.error === "string"
           ? data.error
           : data.error?.message || data.message || `Proxy failed with HTTP ${res.status}`;
+
+      if (endpoint.includes("generativelanguage.googleapis.com") && (res.status === 404 || errDetail.includes("not found"))) {
+        errDetail = `Google AI Studio error: Model "${config.model}" not found or endpoint invalid. Please use a valid model name (e.g. 'gemini-2.0-flash' or 'gemini-1.5-flash').`;
+      } else if (endpoint.includes("groq.com") && errDetail.includes("content must be a string")) {
+        errDetail = `Groq error: Model "${config.model}" does not support vision/images. Please use 'llama-3.2-11b-vision-preview' or 'llama-3.2-90b-vision-preview'.`;
+      }
+
       throw new Error(errDetail);
     }
     return data;
@@ -95,6 +329,9 @@ export const postCompletion = async (
   };
   if (config.apiKey) {
     headers["Authorization"] = `Bearer ${config.apiKey}`;
+    if (endpoint.includes("generativelanguage.googleapis.com")) {
+      headers["x-goog-api-key"] = config.apiKey;
+    }
   }
 
   const res = await fetch(endpoint, {
@@ -105,7 +342,13 @@ export const postCompletion = async (
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error?.message || data.error || `API returned HTTP ${res.status}`);
+    let errDetail = data.error?.message || data.error || `API returned HTTP ${res.status}`;
+    if (endpoint.includes("generativelanguage.googleapis.com") && (res.status === 404 || errDetail.includes("not found"))) {
+      errDetail = `Google AI Studio error: Model "${config.model}" not found. Valid models include 'gemini-2.0-flash' and 'gemini-1.5-flash'.`;
+    } else if (endpoint.includes("groq.com") && errDetail.includes("content must be a string")) {
+      errDetail = `Groq error: Model "${config.model}" does not support images. Please use 'llama-3.2-11b-vision-preview'.`;
+    }
+    throw new Error(errDetail);
   }
   return data;
 };
@@ -153,18 +396,19 @@ export const testAiConnection = async (config: AiJudgeConfig): Promise<{ success
 };
 
 /**
- * Universal Vision Model Analysis with Adaptive Fallback:
- * 1. Tries standard structured output mode.
- * 2. If rejected due to response_format or system message restrictions,
- *    automatically retries with adaptive fallback without response_format
- *    and with merged prompt.
- * 3. Uses outermost JSON extraction to reliably parse conversational model outputs.
+ * Universal Vision Model Analysis with Adaptive Fallback & Memory:
+ * 1. Automatically checks feature memory to bypass doomed response_format calls (preventing 501/400 errors).
+ * 2. Tries standard structured output mode if supported.
+ * 3. If rejected due to 501, 400, response_format, or system message restrictions,
+ *    remembers this capability and seamlessly falls back to universal adaptive payload.
+ * 4. Uses outermost JSON extraction to reliably parse conversational model outputs.
  */
 export const analyzeMemeWithAi = async (
   meme: CurateMemeItem,
   config: AiJudgeConfig
 ): Promise<AiJudgeDecision> => {
   const startTime = Date.now();
+  const cacheKey = getModelCacheKey(config);
 
   const isReasoningModel =
     config.model.toLowerCase().includes("muse") ||
@@ -173,12 +417,49 @@ export const analyzeMemeWithAi = async (
     config.model.toLowerCase().includes("reasoning") ||
     config.model.toLowerCase().includes("think");
 
-  const standardPayload: Record<string, unknown> = {
-    model: config.model,
-    messages: [
+  // Models that don't support response_format or already failed with 501/400 in this session
+  const jsonModeDisabled = isReasoningModel || unsupportedJsonModeModels.has(cacheKey);
+  const systemRoleDisabled = unsupportedSystemRoleModels.has(cacheKey);
+
+  // Downscale and compress image to lightweight base64 to eliminate downstream URL fetching latency
+  const optimizedUrl = await prepareOptimizedImagePayload(meme.image_url);
+  const imagePayload: Record<string, unknown> = {
+    url: optimizedUrl
+  };
+  if (
+    config.provider === "openrouter" ||
+    config.provider === "gemini" ||
+    config.baseUrl.toLowerCase().includes("openrouter") ||
+    config.baseUrl.toLowerCase().includes("openai")
+  ) {
+    imagePayload["detail"] = "low";
+  }
+
+  const tokenLimit = isReasoningModel ? 500 : 380;
+
+  const buildMessages = (useUnifiedPrompt: boolean) => {
+    if (useUnifiedPrompt || systemRoleDisabled) {
+      return [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: buildUnifiedAiJudgePrompt(meme.title, meme.id, config.customInstructions)
+            },
+            {
+              type: "image_url",
+              image_url: imagePayload
+            }
+          ]
+        }
+      ];
+    }
+
+    return [
       {
         role: "system",
-        content: buildAiJudgeSystemPrompt()
+        content: buildAiJudgeSystemPrompt(config.customInstructions)
       },
       {
         role: "user",
@@ -189,84 +470,62 @@ export const analyzeMemeWithAi = async (
           },
           {
             type: "image_url",
-            image_url: {
-              url: meme.image_url
-            }
+            image_url: imagePayload
           }
         ]
       }
-    ],
-    temperature: 0.1,
-    max_tokens: 500
+    ];
   };
 
-  // Only enable response_format on non-reasoning models to avoid token rejection loops
-  if (!isReasoningModel) {
+  const standardPayload: Record<string, unknown> = {
+    model: config.model,
+    messages: buildMessages(false),
+    temperature: 0.1,
+    max_tokens: tokenLimit
+  };
+
+  if (!jsonModeDisabled) {
     standardPayload["response_format"] = { type: "json_object" };
   }
 
   let data: any;
   try {
-    // Attempt 1: Fast inference request
+    // Attempt 1: Fast inference request (direct or memory-adapted)
     data = await postCompletion(config, standardPayload);
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message.toLowerCase() : "";
+    const errMsg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
 
-    // Check if error is related to response_format, unsupported parameters, or system roles
-    const isFormatError =
+    // Check if error is related to response_format, unsupported parameters, 501 Not Implemented, or 400/422 Bad Request
+    const isFormatOr501Error =
+      errMsg.includes("501") ||
+      errMsg.includes("not implemented") ||
       errMsg.includes("response_format") ||
       errMsg.includes("json_object") ||
       errMsg.includes("schema") ||
       errMsg.includes("unexpected") ||
       errMsg.includes("extra inputs") ||
-      errMsg.includes("not supported");
+      errMsg.includes("not supported") ||
+      errMsg.includes("400") ||
+      errMsg.includes("422") ||
+      errMsg.includes("bad request");
+
     const isSystemError = errMsg.includes("system") || errMsg.includes("role");
 
-    if (isFormatError || isSystemError) {
-      // Attempt 2: Universal Adaptive Fallback (No response_format, merged prompt if needed)
+    if (isFormatOr501Error || isSystemError) {
+      // Remember capability failure to avoid repeating failed round trips in future memes
+      if (isFormatOr501Error) {
+        unsupportedJsonModeModels.add(cacheKey);
+      }
+      if (isSystemError) {
+        unsupportedSystemRoleModels.add(cacheKey);
+      }
+
+      // Attempt 2: Universal Adaptive Fallback without response_format and unified prompt if needed
       const fallbackPayload: Record<string, unknown> = {
         model: config.model,
-        messages: isSystemError
-          ? [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: buildUnifiedAiJudgePrompt(meme.title, meme.id)
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: meme.image_url
-                    }
-                  }
-                ]
-              }
-            ]
-          : [
-              {
-                role: "system",
-                content: buildAiJudgeSystemPrompt()
-              },
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: buildAiJudgeUserPrompt(meme.title, meme.id)
-                  },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: meme.image_url
-                    }
-                  }
-                ]
-              }
-            ],
+        messages: buildMessages(true),
         temperature: 0.1,
-        max_tokens: 800
+        max_tokens: isReasoningModel ? 600 : 450
       };
 
       data = await postCompletion(config, fallbackPayload);
@@ -288,13 +547,8 @@ export const analyzeMemeWithAi = async (
     throw new Error("Model returned empty or invalid response content.");
   }
 
-  // Parse JSON with robust outermost extractor
-  let parsed: any;
-  try {
-    parsed = extractJsonFromText(rawContent);
-  } catch (parseErr) {
-    throw new Error(`Failed to parse AI output as JSON: ${rawContent.slice(0, 100)}...`);
-  }
+  // Parse with Universal Hybrid Extractor (seamlessly extracts JSON, Markdown key-values, or conversational text)
+  const parsed = extractHybridCurationResult(rawContent);
 
   // Sanitize and normalize classification fields
   let corpusStatus = String(parsed.corpus_status || "keep").toLowerCase();
@@ -336,7 +590,7 @@ export const analyzeMemeWithAi = async (
 
   return {
     corpus_status: corpusStatus as any,
-    duplicate_of: parsed.duplicate_of || null,
+    duplicate_of: parsed.duplicate_of ? String(parsed.duplicate_of) : null,
     topics: validTopics.length > 0 ? validTopics : ["Everyday Life"],
     tone: tone || "Neutral",
     humour_mechanisms: validMechs.length > 0 ? validMechs : ["Relatability"],

@@ -3,22 +3,23 @@
 > **CRITICAL**: All AI coding agents must read and adhere to [`AGENT_RULES.md`](./AGENT_RULES.md) before making changes.
 
 ## Project Overview
-**Meme Capsule** is a high-performance, minimalist curated meme platform built as a Progressive Web App (PWA). It features a "mobile-first" approach and a playful interface to "Spawn a Random Meme" or view a "Daily Drop".
+**Meme Capsule** is an anti-algorithm meme discovery platform. The public end-user mobile experience (Android APK `com.meme.capsule` and promotional web landing `https://memecapsule.wtf/`) is maintained in a companion mobile repository.
+
+**This repository** serves as the **Serverless Edge Backend, Curation Engine, Moderation Hub, and Administration Portal** deployed on Cloudflare Pages (`https://meme-capsule-eww.pages.dev`). The discontinued legacy root landing UI (`App.tsx`, `styles.css`) has been removed; the default root `/` and hash routes serve the internal Neo-Brutalist tool suites.
 
 **Tech Stack:**
-- **Frontend:** React 19, TypeScript, Vite
-- **Styling:** Vanilla CSS (`styles.css` / `admin.css`)
-- **Backend/API:** Cloudflare Pages Functions (`functions/api/`)
-- **Database:** Cloudflare D1 (SQLite) for meme metadata
+- **Frontend / Internal Workbenches:** React 19, TypeScript, Vite (`/curate`, `/admin`, `/reports`, `/ai-judge`, `/categorise`)
+- **Styling:** Neo-Brutalist CSS (`curate.css`, `admin.css`, `cat.css`, `aiJudge.css`) with bold typography (`Anton`, `Oswald`, `Chivo`)
+- **Backend/API:** Cloudflare Pages Functions (`functions/api/`, `functions/reports.ts`)
+- **Database:** Cloudflare D1 (SQLite) with 6 production migrations
 - **Storage:** Cloudflare R2 for media assets
 - **Hosting:** Cloudflare Pages
 
 **Architecture Highlights:**
-- **Storage Reality:** Uses a three-tier fallback mechanism: 
-  1. Local storage (admin drafts for local testing)
-  2. Cloudflare D1/R2 API (production mode)
-  3. Static fallback memes (`src/data/fallbackMemes.ts`)
-- **Admin Dashboard:** Located at `/admin`. Supports managing the local draft collection (stored in browser `localStorage` as Phase 1.5) and interacting with the production D1/R2 backend (requires `ADMIN_API_TOKEN`).
+- **Two Distinct Ecosystems:**
+  1. **Public / Mass-Audience**: Capacitor 8 Android app (`com.meme.capsule`), single-tap capsule drops ("HIT ME"), 7-meme FIFO prefetch buffer, native Scoped MediaStore image saving, Mood Boards, Meme Vault, AdMob, and Google Play In-App Purchases.
+  2. **Developer / Internal Backend (This Repo)**: Multi-judge consensus curation (`/curate`), D1/R2 administrative management (`/admin`), token-gated user safety moderation (`/reports`), and AI-assisted pre-curation loop (`/ai-judge`).
+- **Data Fallbacks:** Dual-source meme delivery (Cloudflare D1 repository + Reddit gateway), with static offline fallbacks (`src/data/fallbackMemes.ts`).
 
 ## Building and Running
 

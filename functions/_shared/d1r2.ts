@@ -53,6 +53,19 @@ export const json = (body: unknown, init: ResponseInit = {}) =>
     }
   });
 
+export const handleD1Error = (err: unknown, fallbackMessage: string = "Database operation failed") => {
+  if (err instanceof Response) return err;
+  const msg = err instanceof Error ? err.message : fallbackMessage;
+  const isQuota = /quota|limit exceeded|resource limit/i.test(msg);
+  return json(
+    {
+      error: isQuota ? "Cloudflare D1 daily quota limit reached. Operations temporarily paused." : msg,
+      isQuotaExceeded: isQuota
+    },
+    { status: isQuota ? 429 : 500 }
+  );
+};
+
 export const requireAdmin = (request: Request, env: Env) => {
   if (!env.ADMIN_API_TOKEN) {
     return json({ error: "ADMIN_API_TOKEN is not configured." }, { status: 503 });
@@ -107,18 +120,20 @@ export const getRandomMeme = async (env: Env): Promise<Meme | null> => {
   const randomKey = Math.random();
 
   const { results } = await env.DB.prepare(
-    `SELECT * FROM memes
-     WHERE is_active = 1 AND status = 'active' AND random_key >= ?
-     ORDER BY random_key ASC LIMIT 1`
+    `SELECT m.* FROM memes m
+     INNER JOIN meme_curation_final f ON m.id = f.meme_id
+     WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived') AND m.random_key >= ?
+     ORDER BY m.random_key ASC LIMIT 1`
   ).bind(randomKey).all<D1MemeRow>();
 
   let row = results[0];
 
   if (!row) {
     const wrap = await env.DB.prepare(
-      `SELECT * FROM memes
-       WHERE is_active = 1 AND status = 'active'
-       ORDER BY random_key ASC LIMIT 1`
+      `SELECT m.* FROM memes m
+       INNER JOIN meme_curation_final f ON m.id = f.meme_id
+       WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived')
+       ORDER BY m.random_key ASC LIMIT 1`
     ).all<D1MemeRow>();
     row = wrap.results[0];
   }
@@ -131,9 +146,10 @@ export const getRandomMeme = async (env: Env): Promise<Meme | null> => {
 
 export const getDailyMeme = async (env: Env): Promise<Meme | null> => {
   const { results } = await env.DB.prepare(
-    `SELECT * FROM memes
-     WHERE is_active = 1 AND status = 'active'
-     ORDER BY uploaded_at DESC LIMIT 50`
+    `SELECT m.* FROM memes m
+     INNER JOIN meme_curation_final f ON m.id = f.meme_id
+     WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived')
+     ORDER BY m.uploaded_at DESC LIMIT 50`
   ).all<D1MemeRow>();
 
   if (results.length === 0) return null;

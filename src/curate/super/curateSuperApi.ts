@@ -40,7 +40,7 @@ export interface SuperSummaryResponse {
     review_later: number;
     last_active: string;
   }[];
-  ai_judge: {
+  ai_judge?: {
     total_reviewed: number;
     kept: number;
     excluded: number;
@@ -66,7 +66,7 @@ export interface SuperMemeItem {
     curator_note?: string | null;
     reviewed_at: string;
   }[];
-  ai_judge: {
+  ai_judge?: {
     corpus_status: "keep" | "excluded" | "duplicate" | "review_later" | null;
     topics: string[];
     tone: string | null;

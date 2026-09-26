@@ -4,32 +4,43 @@ A high-performance, minimalist curated meme platform built with **Vite + React +
 
 **GitHub Repo:** [https://github.com/editorav010-dev/Meme-Capsule](https://github.com/editorav010-dev/Meme-Capsule)
 
-## What Is Implemented
+## Ecosystem Overview: Public Product vs. Internal Systems
 
-- Mobile-first Vite + React + TypeScript app.
-- `Spawn a Random Meme` reveal flow with a playful pop animation.
-- Share, save, favorite, and local LOL reactions.
-- Daily Drop mode.
-- Admin-only dashboard at `/admin` for local draft collection management.
-- Save/download behavior preserves the original file extension where the browser can detect it.
-- Public meme display and admin preview preserve the meme's natural aspect ratio.
-- Local curated starter pack so the app works before the backend is configured.
-- Cloudflare Pages Functions:
-  - `GET /api/random-meme`
-  - `GET /api/daily-meme`
-  - `POST /api/report`
-  - `/reports` - token-protected moderation dashboard; previews reported memes, resolves or dismisses reports, archives memes, and can add them to `content_blacklist`
-- Cloudflare R2 + D1 backend (migrating from Supabase).
-- PWA manifest and production service worker.
+Meme Capsule operates across two distinct codebases:
+1. **Public / Mass-Audience Product**: Maintained in a companion Android repository (`com.meme.capsule`). Features Capacitor 8 Android app, `HIT ME` single-item drops, 7-meme FIFO prefetch buffer, native Android Scoped MediaStore image saving, Mood Boards, Meme Vault, AdMob monetization, and Google Play billing. Public promotional web presence is at `https://memecapsule.wtf/`.
+2. **Developer / Internal Backend (This Repository)**: Deployed on Cloudflare Pages (`https://meme-capsule-eww.pages.dev`). Serves the serverless API (`functions/api/`), Cloudflare D1/R2 storage, and the internal Neo-Brutalist workbenches (`/curate`, `/admin`, `/reports`, `/ai-judge`, `/categorise`). The discontinued legacy root landing UI has been completely removed.
 
-## Product Logic
+## Core Documentation Index
 
-The public app intentionally has one repeat action. The earlier UI showed two `Again` buttons after a meme appeared: the primary CTA changed to `Again`, and a second yellow `Again` button appeared beside it. That was redundant, so the app now uses one primary button:
+- [`docs/MEME_CAPSULE_APP_KNOWLEDGE.md`](./MEME_CAPSULE_APP_KNOWLEDGE.md) — Master product & technical specification, core product FAQs, and system architecture.
+- [`docs/PRIVACY_COOKIES_AND_DATA_FLOWS.md`](./PRIVACY_COOKIES_AND_DATA_FLOWS.md) — Exhaustive audit of website cookies, Formspree contact form, GA4 telemetry, AdMob integration, and Google Play Data Safety declarations.
+- [`docs/DATABASE.md`](./DATABASE.md) — Cloudflare D1 SQLite database schemas, migrations, and R2 media bucket architecture.
+- [`docs/PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) — Detailed directory mapping, route mappings, and component hierarchy.
+- [`docs/CHANGELOG.md`](./CHANGELOG.md) — Release history and migration milestones.
+- [`docs/CLAUDE.md`](./CLAUDE.md) — Local development, Wrangler commands, and environment settings.
 
-- Before a meme: `Spawn a Random Meme`
-- After a meme: `Spawn Another`
+## What Is Implemented In This Repository
 
-`Daily Drop` has a separate purpose: it reveals the same curated pick for the current day. It is not another random button. Its user value is a tiny return ritual without adding feeds, accounts, streak pressure, or clutter.
+- **Curation & Categorization Engine (`/curate`, `/categorise`)**:
+  - Multi-judge consensus system with token authentication (`cat_users`).
+  - Layer 0 editorial keyboard shortcuts (`K` keep, `E` exclude, `D` duplicate, `L` review later).
+  - Multi-topic taxonomy tagging, tone labeling, and humour mechanism tagging.
+  - Superadmin resolution dashboard for arbitrating conflicting judge votes.
+- **AI Pre-Judge Assisted Loop (`/ai-judge`)**:
+  - LLM-assisted batch evaluation of unreviewed memes.
+  - Automatic confidence-scored recommendation generation for human approval.
+- **Admin Dashboard (`/admin`)**:
+  - Cloudflare D1 database management and R2 storage sync.
+  - Raw SQL query runner with safe execution guards.
+  - Event telemetry recalculation engine and CSV/Excel exports.
+- **Moderation Dashboard (`/reports`)**:
+  - Token-protected review interface for user-reported content.
+  - One-click meme archiving and addition to `content_blacklist`.
+- **Edge Serverless API (`functions/api/`)**:
+  - `GET /api/random-meme` & `GET /api/daily-meme` (dual-source delivery with fallback).
+  - `POST /api/events` (telemetry queue flusher).
+  - `POST /api/report` (user safety reporting).
+  - Admin analytics endpoints (`/api/admin/analytics/*`).
 
 ## Admin Dashboard
 
