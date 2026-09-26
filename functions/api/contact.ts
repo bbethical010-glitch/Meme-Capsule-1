@@ -73,7 +73,7 @@ export async function onRequestPost(context: { env: Env; request: Request }): Pr
       recipient = recipientMatch[1].trim()
     }
     if (!recipient || !recipient.includes('@')) {
-      recipient = 'memecapsule.app@gmail.com'
+      recipient = 'support@memecapsule.wtf'
     }
 
     let fromAddress = (env.CONTACT_FROM_EMAIL || '').trim()
