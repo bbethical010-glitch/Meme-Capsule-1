@@ -1,5 +1,4 @@
 // functions/api/contact.ts
-import { CORS_HEADERS } from '../_shared/d1r2'
 
 interface Env {
   RESEND_API_KEY: string
@@ -8,8 +7,9 @@ interface Env {
 }
 
 const POST_CORS_HEADERS: Record<string, string> = {
-  ...CORS_HEADERS,
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 }
 
 export async function onRequestOptions(): Promise<Response> {
