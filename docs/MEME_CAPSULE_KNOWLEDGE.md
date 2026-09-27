@@ -12,7 +12,7 @@
 > - **Anmol Verma** (`editorav010-dev` / `anmolverma.env@gmail.com`): Lead Backend Developer — Full backend engineering, serverless architecture, core algorithms, AI tools implementation, security, curation systems, and all internal backend workbenches.  
 > - **Pratham Pandey** (`bbethical010-glitch` / `bbethical010@gmail.com`): Lead Frontend Developer & Original Ideator — Founding concept, frontend landing pages, Android APK development, app theme, typography, UI/UX, Java Android bridge, and client-side integrations.  
 > - **Faraz Ahmed** (`thesplashsnize@gmail.com`): Social Media & Marketing Lead — Social media management, content planning, niche analysis, scripting, and marketing campaigns.  
-> **Official App Email (User Support & Marketing):** `memecapsule.app@gmail.com`  
+> **Official App Email (User Support & Marketing):** `support@memecapsule.wtf`  
 > **Official Social Media:**  
 > Instagram: https://www.instagram.com/capsule.meme/ | X: https://x.com/memecapsule_ | Threads: https://www.threads.com/@capsule.meme  
 > **Last Master Synchronization:** September 26, 2026  
@@ -208,7 +208,7 @@ Meme Capsule is a three-person collaborative project with a clear division of ar
     - X: https://x.com/memecapsule_
     - Threads: https://www.threads.com/@capsule.meme
 
-**Official App Email (User Support & Marketing):** `memecapsule.app@gmail.com`  
+**Official App Email (User Support & Marketing):** `support@memecapsule.wtf`  
 *(This is the app's public-facing contact email — not a personal developer address.)*
 
 ### 2.2 The Three Decoupled Codebases
@@ -694,19 +694,21 @@ DEVELOPERS & LEADERSHIP:
   Lead Frontend Developer & Original Ideator: Founding concept, APK, web platform (memecapsule.wtf), app theme, typography, UI/UX, Java Android bridge, MediaStore integrations, client build setup.
 - Faraz Ahmed (thesplashsnize@gmail.com)
   Social Media & Marketing Lead: Social handles, content planning, niche analysis, scripting, quality control, and marketing campaigns.
-Official App Email (User Support & Marketing): memecapsule.app@gmail.com
+Official App Email (User Support & Marketing): support@memecapsule.wtf
 Social Media:
   Instagram: https://www.instagram.com/capsule.meme/
   X: https://x.com/memecapsule_
   Threads: https://www.threads.com/@capsule.meme
 
 ECOSYSTEM STRUCTURE:
-1. PUBLIC MOBILE APP (com.meme.capsule):
+1. PUBLIC MOBILE APP (com.meme.capsule - v3.3 / versionCode 24):
    - Tech: React 19, TypeScript, Vite 6, Tailwind CSS v4, Capacitor 8 Android container.
-   - Core UX: 4-card 3D perspective spring deck (@react-spring/web, @use-gesture/react), 7-meme FIFO prefetch buffer, instant-touch 38x38 overlay buttons (onPointerDown with debounce), 4-button CTA bar (LIKE, VAULT, PIN, SHARE).
-   - Viral Sharing: Neo-Brutalist Share Sheet with live thumbnail preview, auto-attached Play Store link, 6 animated social media SVGs (WhatsApp, Instagram, Facebook, X, Telegram, Discord), QuickShare, More Options (#FF8C00 native chooser).
+   - Core UX: 4-card 3D perspective spring deck (@react-spring/web, @use-gesture/react), 12-meme rolling FIFO prefetch buffer (STACK_BATCH_SIZE = 10, PIPELINE_TARGET_SIZE = 12) with 60%-70% stack consumption prefetch trigger (STACK_PREFETCH_CONSUMPTION_RATIO = 0.6 / FIFO_REFILL_TRIGGER_SIZE = 4) and streaming per-meme enqueueing (enqueueMemeToFifo + advanceInlineWithoutLoadingScreen so viewing flow never breaks with a full-screen loading screen), zero floating action buttons over the Meme Box, and horizontal 4-column CTA row (nav#ctaRow, max-w-[356px] w-full mt-3.5) directly below the Meme Box: LIKE (#FF2A85) -> VAULT (#A855F7) -> PIN (#FACC15) -> MORE (⋮) (#00E5FF) with translate(3px, 3px) active press, ink-spread ripple (@keyframes inkSpread), 6-tick radial shockwave bursts (@keyframes burstSparks), and pop icon animations (@keyframes neoBurst). Tapping MORE opens #moreMenu (w-48 bg-white border-4 border-black) containing SHARE (#A855F7), DOWNLOAD (#FACC15), and REPORT (#FF2A85).
+   - Smart Session Lifecycle (Background App-Switch Retention vs Cold-Start Homepage Reset - v3.2): Uses `sessionStorage` (`meme_capsule_active_session_v1`), a short-lived 2-minute external share handoff token (`meme_capsule_share_handoff_v1`), and native Android process/task state detection (`window.MemeCapsuleAndroid.shouldRestoreRunningSession()` + `meme-capsule-reset-to-home` in `MainActivity.java`). Switching between running apps or sharing to external apps preserves the exact loaded meme and 12-meme FIFO queue, whereas removing/closing the app from running background applications in Android Recents and reopening it starts fresh on the Homepage (`screen = 'waiting'`, `activeTab = 'home'`).
+   - Top-Left Header & Settings Dismissal: Removed the leaf/seed badge (🌱 1) from the top-left header and replaced it with a redesigned Neo-Brutalist Settings icon button (#1c1c1e / #A855F7, 2px solid #000, 2.5px 2.5px 0px #000). Replaced the redundant large gear square on the top right of APP SETTINGS with a Neo-Brutalist [X] Close Button, and enabled top-left header re-tap toggle, backdrop tap-to-dismiss, and Android hardware back dismissal.
+   - Viral Sharing: Persistent Share Sheet Ribbon sits 100% flush (0px breathing space) on the top border of the 3-tab bottom navigation dock (bottom: calc(60px + max(env(safe-area-inset-bottom, 0px), 16px))). Expands smoothly over 320ms cubic-bezier(0.16, 1, 0.3, 1) from behind the dock, supports Instagram-style 0-latency 1:1 finger drag-to-dismiss (26% height / 0.5px/ms velocity threshold), and removes both the 5 technical/debug labels and the visible dark promotional text preview box from the frontend while preserving 100% of the promotional message + Play Store link payload on clipboard and share intents.
    - Native Java: MainActivity.java injects "window.MemeCapsuleAndroid" for Scoped MediaStore gallery saving (Pictures/Meme Capsule) and targeted intent sharing (shareImageToApp).
-   - Collections, Settings & Monetization: Meme Vault (free limit 20, Pro unlimited), Mood Boards, dedicated 4th Settings & Privacy tab (consolidating Privacy Policy v1.1, full history/data erasure, and feed/buffer/shake toggles), AdMob interstitials (every 4th drop), In-App Purchase (₹99 remove_ads_forever).
+   - Collections, Settings & Monetization: Meme Vault (free limit 20, Pro unlimited), Mood Boards, dedicated Settings & History page (Privacy Policy v1.1, 4 granular history/data erasure controls, feed/buffer/shake toggles), AdMob interstitials (every 4th drop), In-App Purchase (₹99 remove_ads_forever).
 
 2. PUBLIC WEB PLATFORM (memecapsule.wtf):
    - Tech: React 18, Vite 5, Tailwind CSS v3, React Router DOM v6, static HTML prerendering (vite-plugin-prerender with ReactSSRRenderer) on GitHub Pages.
@@ -733,3 +735,8 @@ CRITICAL RULES & CONSTRAINTS:
 4. CLEAR CODEBASE BOUNDARIES: Maintain strict separation between Mobile APK, Promo Web, and Edge Backend.
 =========================================================
 ```
+
+
+
+
+
