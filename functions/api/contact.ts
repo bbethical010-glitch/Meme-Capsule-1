@@ -1,5 +1,9 @@
 // functions/api/contact.ts
-import { CORS_HEADERS } from '../_shared/d1r2'
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
 interface Env {
   RESEND_API_KEY: string

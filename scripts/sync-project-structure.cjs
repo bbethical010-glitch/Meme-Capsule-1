@@ -7,9 +7,9 @@ const DOCS_FILE = path.join(PROJECT_ROOT, 'docs', 'PROJECT_STRUCTURE.md');
 const EXCLUDED = new Set(['node_modules', '.git', '.wrangler', 'dist', 'scripts']);
 
 const ANNOTATIONS = {
-  '.planning': 'Project planning and roadmap',
+  'planning': 'Project planning and roadmap (in docs/)',
   'ROADMAP.md': 'Phase-by-phase development plan',
-  'STATE.md': 'Current project state and next actions',
+  'STATE.md': 'Current project state and next actions (in docs/)',
   'd1': 'Cloudflare D1 database (NEW — Phase 2)',
   'schema.sql': 'SQLite schema for meme metadata',
   'docs': 'Dedicated project documentation folder',

@@ -21,7 +21,7 @@ The following core architectural assets and components are protected. AI agents 
 
 ### A. Established Architecture & Infrastructure
 - **Cloudflare Pages Functions (`functions/api/`)**: The serverless API architecture using Cloudflare bindings (`env.DB` for D1 and `env.BUCKET` for R2). Do not replace this with Express, Next.js, or external servers.
-- **Cloudflare D1 Database (`d1/migrations/`)**: Existing migration files (`001_initial.sql`, `002_schema_v2.sql`, `003_categorisation.sql`, `004_curation.sql`, `005_curation_final.sql`, `000_complete_setup.sql`) are historical database artifacts. Never modify or delete past migration files. Add new migration files incrementally.
+- **Cloudflare D1 Database (`d1/migrations/`)**: Existing migration files (`000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`) are historical database artifacts representing 13 production migrations. Never modify or delete past migration files. Add new migration files incrementally.
 - **R2 Storage Integration**: The media bucket binding (`env.BUCKET`) and public asset URL resolution (`env.R2_PUBLIC_URL`).
 - **Cloudflare Configuration**: `wrangler.toml`, `.dev.vars`, and environment bindings.
 
@@ -106,11 +106,11 @@ If a test, build, or command fails:
 > **CRITICAL RULE:** Documentation is a first-class deliverable. Every AI coding agent **MUST** keep all affected Markdown documentation files completely synchronized and accurate after **every change, feature addition, refactoring, or bugfix** in the codebase. Never leave a task marked complete without updating the documentation.
 
 ### The Canonical Documentation Inventory to Keep Updated:
-1. **`docs/MEME_CAPSULE_KNOWLEDGE.md`**: Master architectural & product knowledge reference. Update whenever features, concepts, workflows, or ecosystem responsibilities change.
-2. **`docs/PRIVACY_COOKIES_AND_DATA_FLOWS.md`**: Telemetry, cookies, analytics, subprocessors, and privacy compliance. Update whenever new third-party services, forms, cookies, SDKs, or data pipelines are modified.
-3. **`docs/DATABASE.md`**: Cloudflare D1 SQLite schemas, table migrations, column structures, and R2 media bucket configurations.
-4. **`docs/PROJECT_STRUCTURE.md`**: Directory maps, file layouts, component boundaries, and dependency mappings.
-5. **`docs/README.md` & root `README.md`**: High-level repository guides, active routes, and setup instructions.
+1. **`./MEME_CAPSULE_KNOWLEDGE.md`**: Master architectural & product knowledge reference. Update whenever features, concepts, workflows, or ecosystem responsibilities change.
+2. **`./PRIVACY_COOKIES_AND_DATA_FLOWS.md`**: Telemetry, cookies, analytics, subprocessors, and privacy compliance. Update whenever new third-party services, forms, cookies, SDKs, or data pipelines are modified.
+3. **`./DATABASE.md`**: Cloudflare D1 SQLite schemas, table migrations, column structures, and R2 media bucket configurations.
+4. **`./PROJECT_STRUCTURE.md`**: Directory maps, file layouts, component boundaries, and dependency mappings.
+5. **`./README.md` & root `README.md`**: High-level repository guides, active routes, and setup instructions.
 6. **`GEMINI.md` / `CLAUDE.md`**: AI context files, runtime configurations, and developer operating guidelines.
 7. **`AGENT_RULES.md`**: The permanent operating guide itself — update if workflow policies or protected areas evolve.
 8. **`walkthrough.md`**: Comprehensive record of changes made, files touched, testing commands executed, and verification results.
@@ -142,7 +142,7 @@ Before committing and pushing to git, confirm:
 
 ## 9. Shared Project Knowledge — MEME_CAPSULE_KNOWLEDGE.md
 
-The single source of truth for all project-wide context, architecture, decisions, and cross-codebase knowledge lives in `.knowledge/MEME_CAPSULE_KNOWLEDGE.md`.
+The single source of truth for all project-wide context, architecture, decisions, and cross-codebase knowledge lives in `docs/MEME_CAPSULE_KNOWLEDGE.md`.
 It is NOT part of this repository — it syncs via a separate GitHub repository (`editorav010-dev/meme-capsule-sync`).
 
 ### Mandatory Workflow:
@@ -151,11 +151,11 @@ It is NOT part of this repository — it syncs via a separate GitHub repository 
 1. Always fetch the latest version first:
    - Windows: `powershell -File fetch-knowledge.ps1`
    - Mac/Linux: `./fetch-knowledge.sh`
-2. Read `.knowledge/MEME_CAPSULE_KNOWLEDGE.md` fully before writing any code or changing configuration.
+2. Read `docs/MEME_CAPSULE_KNOWLEDGE.md` fully before writing any code or changing configuration.
 
 **AFTER any meaningful change:**
 (new feature, architecture decision, bug fix, workflow change, new dependency, table migration):
-1. Update `.knowledge/MEME_CAPSULE_KNOWLEDGE.md` with the new relevant notes.
+1. Update `docs/MEME_CAPSULE_KNOWLEDGE.md` with the new relevant notes.
 2. Push the updated knowledge file back to the shared repository:
    - Windows: `powershell -File update-knowledge.ps1`
    - Mac/Linux: `./update-knowledge.sh`
@@ -166,11 +166,11 @@ It is NOT part of this repository — it syncs via a separate GitHub repository 
 ## 10. Canonical Project Team & Ownership Division
 
 All agents must respect and accurately attribute project ownership:
-- **Anmol Verma** (Lead Backend Developer — GitHub: [`editorav010-dev`](https://github.com/editorav010-dev), Email: `anmolverma.env@gmail.com`): Full backend engineering, serverless architecture, core algorithms, AI tools implementation, security, curation systems, and all internal backend workbenches.
-- **Pratham Pandey** (Lead Frontend Developer & Original Ideator — GitHub: [`bbethical010-glitch`](https://github.com/bbethical010-glitch), Email: `bbethical010@gmail.com`): Original concept and founding idea, frontend landing pages, Android APK development (`com.meme.capsule`), app theme, typography, UI/UX, Java Android bridge, and client integrations.
-- **Faraz Ahmed** (Social Media & Marketing Lead — Email: `thesplashsnize@gmail.com`): Social media handles management, content planning, niche analysis, scripting, and marketing campaigns.
+- **Anmol Verma** (Lead Backend Developer — GitHub: [`editorav010-dev`](https://github.com/editorav010-dev)): Full backend engineering, serverless architecture, core algorithms, AI tools implementation, security, curation systems, and all internal backend workbenches.
+- **Pratham Pandey** (Lead Frontend Developer & Original Ideator — GitHub: [`bbethical010-glitch`](https://github.com/bbethical010-glitch)): Original concept and founding idea, frontend landing pages, Android APK development (`com.meme.capsule`), app theme, typography, UI/UX, Java Android bridge, and client integrations.
+- **Faraz Ahmed** (Social Media & Marketing Lead): Social media handles management, content planning, niche analysis, scripting, and marketing campaigns.
 
-**Official App Email (User Support & Marketing):** `memecapsule.app@gmail.com`  
+**Official App Email (User Support & Marketing):** `support@memecapsule.wtf` (with `memecapsule.app@gmail.com` as backup)  
 **Official Social Media:**  
 - Instagram: https://www.instagram.com/capsule.meme/  
 - X: https://x.com/memecapsule_  

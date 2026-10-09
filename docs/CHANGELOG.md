@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-28
+
+- Completed full documentation audit & repository reorganization: all markdown files centralized into `/docs`.
+- Synchronized `docs/STATE.md` with true production edge state (Cloudflare Pages, D1 with 13 migrations, R2 CDN, 5 internal workbenches).
+- Reconfigured `fetch-knowledge.ps1` and `update-knowledge.ps1` to directly target `docs/MEME_CAPSULE_KNOWLEDGE.md`, eliminating duplicate root/nested markdown files.
+- Added public `/api/contact` endpoint in Cloudflare Pages Functions for website contact form submissions.
+- Consolidated multi-judge consensus curation, SuperAdmin resolution, AI judge vision loop, and AES-GCM-256 API key encryption across documentation.
+
+## 2026-09-24
+
+- Implemented 3-tier meme partitioning architecture in D1 via Migration 012 (`curation_status` column: `active`, `excluded`, `backlog`).
+- Synchronized SuperAdmin Authoritative Resolved with Admin Active counts and live D1 database state.
+- Purged removed judge accounts and enforced strict SuperAdmin session validation.
+
 ## 2026-05-24
 
 - Verified and documented real-time meme likes feature backend architecture.

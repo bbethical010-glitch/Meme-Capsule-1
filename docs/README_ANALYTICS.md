@@ -40,7 +40,7 @@ npm run dev
 
 **Terminal B: Run the Aggregation Worker**
 ```bash
-npx wrangler dev src/workers/analyticsAggregator.ts --local
+npx wrangler dev workers/analyticsAggregator.ts --local
 ```
 
 ### 4. Triggering Aggregation Manually
