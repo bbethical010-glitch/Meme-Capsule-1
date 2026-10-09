@@ -491,6 +491,12 @@ Designed for rapid, high-volume human evaluation. Curators use Layer 0 keyboard 
 - `Z, C, V, B, N, M, J, P, O`: Select humor mechanisms.
 - `Cmd/Ctrl + Z`: Instant undo last curation decision.
 
+**AI-Judgement Review Workflow for Human Judges (Judges 1, 2, 3):**
+The curation interface now deeply integrates offline AI predictions from `user-judge4` and `user-judge5`.
+- **State A (AI Consensus):** Both AIs agree (e.g., both Keep or both Exclude). Curators can press `Enter` or `Space` to fast-approve the consensus.
+- **State B (AI Disagreement):** The AIs disagree. Curators are presented with AI 4 and AI 5's differing analyses and must explicitly choose `4` (Adopt Judge 4), `5` (Adopt Judge 5), or `O` (Override manually).
+- **State C (Needs Eyes / Partial AI):** One or both AI judgements are missing. Curators use the manual `O` (Override) mode to curate from scratch.
+
 ### 5.5 SuperAdmin Arbitration & Authoritative Active Synchronization
 When judges diverge in their votes, the meme surfaces in the **SuperAdmin Command Center**:
 - **Authoritative Keep (`corpus_status = 'keep'`)**: Automatically activates the meme in `memes` (`status = 'active'`, `is_active = 1`, `curation_status = 'keep'`), registering it in the live public spawn pool (111 memes).

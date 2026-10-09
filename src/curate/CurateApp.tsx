@@ -14,6 +14,7 @@ import CurationStatsModal from "./CurationStatsModal";
 import CurateLogin from "./CurateLogin";
 import CurateSuperDashboard from "./super/CurateSuperDashboard";
 import CurateAccountModal from "./CurateAccountModal";
+import AiReviewPanel from "./AiReviewPanel";
 import AiPreJudgePanel from "./AiPreJudgePanel";
 import type { AiJudgeConfig, AiJudgeDecision } from "./ai-judge/aiJudgeTypes";
 import { DEFAULT_AI_JUDGE_CONFIG } from "./ai-judge/aiJudgeTypes";
@@ -61,6 +62,8 @@ export default function CurateApp() {
   const [stats, setStats] = useState({ total: 4485, reviewed: 0, remaining: 4485, current_index: 1 });
   const [showStatsModal, setShowStatsModal] = useState<boolean>(false);
   const [showAccountModal, setShowAccountModal] = useState<boolean>(false);
+
+  const [overrideMode, setOverrideMode] = useState<boolean>(false);
 
   // Form State for current meme
   const [status, setStatus] = useState<CorpusStatus | null>(null);
@@ -115,7 +118,8 @@ export default function CurateApp() {
     note,
     currentMeme,
     isSaving: false,
-    undoStack
+    undoStack,
+    overrideMode
   });
 
   useEffect(() => {
@@ -128,9 +132,10 @@ export default function CurateApp() {
       note,
       currentMeme,
       isSaving,
-      undoStack
+      undoStack,
+      overrideMode
     };
-  }, [status, topics, tone, mechanisms, duplicateOf, note, currentMeme, isSaving, undoStack]);
+  }, [status, topics, tone, mechanisms, duplicateOf, note, currentMeme, isSaving, undoStack, overrideMode]);
 
   const handleLoginSuccess = (newToken: string, newUser: CuratorUser) => {
     sessionStorage.setItem("curator_token", newToken);
@@ -172,13 +177,23 @@ export default function CurateApp() {
           setMechanisms(res.meme.curation.humour_mechanisms || []);
           setDuplicateOf(res.meme.curation.duplicate_of || "");
           setNote(res.meme.curation.curator_note || "");
+          setOverrideMode(true);
         } else {
-          setStatus(null);
-          setTopics([]);
-          setTone(null);
-          setMechanisms([]);
-          setDuplicateOf("");
+          const j4 = res.meme.ai_judgements?.judge4;
+          const j5 = res.meme.ai_judgements?.judge5;
+          let prefill = j4 || j5 || null;
+          if (j4 && j5 && j4.corpus_status === j5.corpus_status && j4.corpus_status !== 'excluded') {
+            prefill = j4;
+          } else if (j4 && j5) {
+            prefill = j4;
+          }
+          setStatus(prefill?.corpus_status || null);
+          setTopics(prefill?.topics || []);
+          setTone(prefill?.tone || null);
+          setMechanisms(prefill?.humour_mechanisms || []);
+          setDuplicateOf(prefill?.duplicate_of || "");
           setNote("");
+          setOverrideMode(false);
         }
       }
       return res.meme;
@@ -197,7 +212,7 @@ export default function CurateApp() {
   }, [token, viewMode, loadMeme]);
 
   // Save current decision and advance
-  const handleSaveAndAdvance = useCallback(async (forcedStatus?: CorpusStatus, forcedDecision?: AiJudgeDecision): Promise<CurateMemeItem | null> => {
+  const handleSaveAndAdvance = useCallback(async (forcedStatus?: CorpusStatus, forcedDecision?: AiJudgeDecision | import("./curateTypes").CuratedMemeData): Promise<CurateMemeItem | null> => {
     const s = stateRef.current;
     if (!s.currentMeme || s.isSaving) return null;
 
@@ -205,9 +220,15 @@ export default function CurateApp() {
     const activeTopics = forcedDecision ? (forcedDecision.topics || []) : (activeStatus === "keep" ? s.topics : []);
     const activeTone = forcedDecision ? (forcedDecision.tone || null) : (activeStatus === "keep" ? s.tone : null);
     const activeMechanisms = forcedDecision ? (forcedDecision.humour_mechanisms || []) : (activeStatus === "keep" ? s.mechanisms : []);
-    const activeNote = forcedDecision
-      ? (forcedDecision.curator_note ? `[AI ${forcedDecision.modelUsed || "Vision"} ${Math.round((forcedDecision.confidence || 0) * 100)}%] ${forcedDecision.curator_note}` : null)
-      : (s.note || null);
+    
+    let activeNote = s.note || null;
+    if (forcedDecision) {
+      if ('modelUsed' in forcedDecision) {
+        activeNote = forcedDecision.curator_note ? `[AI ${forcedDecision.modelUsed || "Vision"} ${Math.round((forcedDecision.confidence || 0) * 100)}%] ${forcedDecision.curator_note}` : null;
+      } else {
+        activeNote = forcedDecision.curator_note || null;
+      }
+    }
     const activeDuplicateOf = forcedDecision ? (forcedDecision.duplicate_of || null) : (activeStatus === "duplicate" ? s.duplicateOf : null);
 
     const currentMemeId = s.currentMeme.id;
@@ -315,6 +336,70 @@ export default function CurateApp() {
         return;
       }
 
+      // Prev / Next on Left/Right Arrows (Available in both modes)
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (stateRef.current.currentMeme) {
+          loadMeme(stateRef.current.currentMeme.id, "prev");
+        }
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (stateRef.current.currentMeme) {
+          loadMeme(stateRef.current.currentMeme.id, "next");
+        }
+        return;
+      }
+
+      // 0. Review Mode Keymap
+      if (!stateRef.current.overrideMode) {
+        const j4 = stateRef.current.currentMeme?.ai_judgements?.judge4;
+        const j5 = stateRef.current.currentMeme?.ai_judgements?.judge5;
+        const hasJ4 = !!j4?.corpus_status;
+        const hasJ5 = !!j5?.corpus_status;
+        const isExcluded = j4?.corpus_status === 'excluded' || j5?.corpus_status === 'excluded';
+    
+        let aiState: 'A' | 'B' | 'C' = 'C';
+        if (hasJ4 && hasJ5 && !isExcluded) {
+          if (j4.corpus_status === j5.corpus_status) {
+            aiState = 'A';
+          } else {
+            aiState = 'B';
+          }
+        }
+        const topicsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.topics].sort()) === JSON.stringify([...j5.topics].sort());
+        const mechanismsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.humour_mechanisms].sort()) === JSON.stringify([...j5.humour_mechanisms].sort());
+        const toneMatch = hasJ4 && hasJ5 && j4.tone === j5.tone;
+        const allDetailsMatch = topicsMatch && mechanismsMatch && toneMatch;
+
+        if (key === "o") {
+          e.preventDefault();
+          setOverrideMode(true);
+          return;
+        }
+
+        if ((e.key === "Enter" || e.code === "Space") && aiState === 'A' && allDetailsMatch) {
+          e.preventDefault();
+          handleSaveAndAdvance(); // prefilled values are already in state
+          return;
+        }
+
+        if (key === "4" && j4 && (aiState === 'B' || (aiState === 'A' && !allDetailsMatch))) {
+          e.preventDefault();
+          handleSaveAndAdvance(j4.corpus_status, j4);
+          return;
+        }
+
+        if (key === "5" && j5 && (aiState === 'B' || (aiState === 'A' && !allDetailsMatch))) {
+          e.preventDefault();
+          handleSaveAndAdvance(j5.corpus_status, j5);
+          return;
+        }
+
+        return; // Prevent Layer 0 shortcuts if not in override mode
+      }
+
       // 1. Layer 0 Editorial Shortcuts
       if (key === "k") {
         e.preventDefault();
@@ -350,22 +435,6 @@ export default function CurateApp() {
       if (key === "u" || e.key === "Backspace") {
         e.preventDefault();
         handleUndo();
-        return;
-      }
-
-      // 4. Prev / Next on Left/Right Arrows
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        if (stateRef.current.currentMeme) {
-          loadMeme(stateRef.current.currentMeme.id, "prev");
-        }
-        return;
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        if (stateRef.current.currentMeme) {
-          loadMeme(stateRef.current.currentMeme.id, "next");
-        }
         return;
       }
 
@@ -623,9 +692,45 @@ export default function CurateApp() {
           )}
         </section>
 
-        {/* Right: Layer 0 Editorial & Multi-Dimensional Categorization */}
+        {/* Right: Review Panel OR Override Mode */}
         <section style={{ display: "flex", flexDirection: "column" }}>
-          <AiPreJudgePanel prediction={currentMeme?.ai_prediction ?? null} />
+          {(() => {
+            if (!overrideMode && currentMeme) {
+              const j4 = currentMeme.ai_judgements?.judge4;
+              const j5 = currentMeme.ai_judgements?.judge5;
+              const hasJ4 = !!j4?.corpus_status;
+              const hasJ5 = !!j5?.corpus_status;
+              const isExcluded = j4?.corpus_status === 'excluded' || j5?.corpus_status === 'excluded';
+          
+              let aiState: 'A' | 'B' | 'C' = 'C';
+              if (hasJ4 && hasJ5 && !isExcluded) {
+                if (j4.corpus_status === j5.corpus_status) {
+                  aiState = 'A';
+                } else {
+                  aiState = 'B';
+                }
+              }
+              const topicsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.topics].sort()) === JSON.stringify([...j5.topics].sort());
+              const mechanismsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.humour_mechanisms].sort()) === JSON.stringify([...j5.humour_mechanisms].sort());
+              const toneMatch = hasJ4 && hasJ5 && j4.tone === j5.tone;
+              const allDetailsMatch = topicsMatch && mechanismsMatch && toneMatch;
+
+              return (
+                <AiReviewPanel
+                  j4={j4}
+                  j5={j5}
+                  aiState={aiState}
+                  allDetailsMatch={allDetailsMatch}
+                  onEnterOverride={() => setOverrideMode(true)}
+                  onAdopt={(j) => handleSaveAndAdvance(j.corpus_status, j)}
+                />
+              );
+            }
+            return null;
+          })()}
+
+          <div style={{ display: overrideMode ? "block" : "none" }}>
+            <AiPreJudgePanel prediction={currentMeme?.ai_prediction ?? null} />
 
           {/* Layer 0: Editorial Judgment */}
           <EditorialButtons
@@ -692,21 +797,35 @@ export default function CurateApp() {
               UNDO [U]
             </button>
           </div>
+          </div>
         </section>
       </main>
 
       {/* Keyboard Shortcuts Footer Strip */}
       <footer className="curate-shortcuts-footer">
-        <span><span className="curate-hotkey-tag">K</span> KEEP</span>
-        <span><span className="curate-hotkey-tag">X</span> EXCLUDE</span>
-        <span><span className="curate-hotkey-tag">D</span> DUPLICATE</span>
-        <span><span className="curate-hotkey-tag">R</span> LATER</span>
-        <span><span className="curate-hotkey-tag">1-9,0,-,=</span> TOPICS (MAX 3)</span>
-        <span><span className="curate-hotkey-tag">Q,W,E,A,S,F</span> TONE (1)</span>
-        <span><span className="curate-hotkey-tag">Z,C,V,B,N,M,J,P,O</span> MECHANISM (MAX 2)</span>
-        <span><span className="curate-hotkey-tag">ENTER</span> CONFIRM</span>
-        <span><span className="curate-hotkey-tag">U</span> UNDO</span>
-        <span><span className="curate-hotkey-tag">←/→</span> PREV/NEXT</span>
+        {!overrideMode ? (
+          <>
+            <span><span className="curate-hotkey-tag">ENTER</span> APPROVE</span>
+            <span><span className="curate-hotkey-tag">4</span> ADOPT J4</span>
+            <span><span className="curate-hotkey-tag">5</span> ADOPT J5</span>
+            <span><span className="curate-hotkey-tag">O</span> OVERRIDE</span>
+            <span><span className="curate-hotkey-tag">U</span> UNDO</span>
+            <span><span className="curate-hotkey-tag">←/→</span> PREV/NEXT</span>
+          </>
+        ) : (
+          <>
+            <span><span className="curate-hotkey-tag">K</span> KEEP</span>
+            <span><span className="curate-hotkey-tag">X</span> EXCLUDE</span>
+            <span><span className="curate-hotkey-tag">D</span> DUPLICATE</span>
+            <span><span className="curate-hotkey-tag">R</span> LATER</span>
+            <span><span className="curate-hotkey-tag">1-9,0,-,=</span> TOPICS (MAX 3)</span>
+            <span><span className="curate-hotkey-tag">Q,W,E,A,S,F</span> TONE (1)</span>
+            <span><span className="curate-hotkey-tag">Z,C,V,B,N,M,J,P,O</span> MECHANISM (MAX 2)</span>
+            <span><span className="curate-hotkey-tag">ENTER</span> CONFIRM</span>
+            <span><span className="curate-hotkey-tag">U</span> UNDO</span>
+            <span><span className="curate-hotkey-tag">←/→</span> PREV/NEXT</span>
+          </>
+        )}
       </footer>
 
       {/* Stats & Export Modal */}

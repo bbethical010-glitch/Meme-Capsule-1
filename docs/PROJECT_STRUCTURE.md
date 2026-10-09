@@ -208,6 +208,7 @@ meme application/
 │   │   │   ├── CuratorComparisonTable.tsx
 │   │   │   └── CuratorResolveModal.tsx
 │   │   ├── AiPreJudgePanel.tsx
+│   │   ├── AiReviewPanel.tsx
 │   │   ├── CategorizationPanel.tsx
 │   │   ├── curate.css
 │   │   ├── CurateAccountModal.tsx
