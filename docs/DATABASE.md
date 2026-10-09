@@ -2,7 +2,7 @@
 
 ## Current Storage
 
-The project is migrating from Supabase to Cloudflare R2 + D1 for production backend.
+The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 13 production D1 migrations applied from `000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`).
 
 Current storage layers:
 
@@ -73,6 +73,7 @@ Core fields:
 - `rights_note`: `original`, `licensed`, `permission`, or `reviewed`.
 - `share_text`: text used by share actions.
 - `random_key`: indexed random selection helper (REAL type).
+- `curation_status`: `keep`, `excluded`, `duplicate`, `review_later`, or `NULL`. Added in Migration 012 to partition non-active memes into authoritatively rejected (`excluded`) vs uncurated backlog (`NULL`).
 
 Only records with `status = 'active'` and `is_active = 1` should be returned to users.
 
@@ -159,7 +160,27 @@ Destructive actions use the meme ID stored on the report rather than trusting a
 browser-supplied target. The dashboard requires `ADMIN_API_TOKEN` and asks for
 confirmation before removing or blacklisting content.
 
-Public routes (`/api/random-meme`, `/api/daily-meme`) never use the admin token. They only return rows with `status = 'active'`, `is_active = 1`, and an authoritative finalization in `meme_curation_final` with `corpus_status = 'keep'`. All unfinalized or excluded memes are maintained in `status = 'archived'` (`is_active = 0`) and are excluded at the SQL query level.
+Public routes (`/api/random-meme`, `/api/daily-meme`, `/api/memes/random`) never use the admin token. They only return rows with `status = 'active'`, `is_active = 1`, and an authoritative finalization in `meme_curation_final` with `corpus_status = 'keep'`. All unfinalized or excluded memes are maintained in `status = 'archived'` (`is_active = 0`) and are excluded at the SQL query level.
+
+## Authoritative Resolution & Active Pool Synchronization
+
+The platform enforces a canonical single-source-of-truth contract across `memes` and `meme_curation_final`:
+1. **`meme_curation_final` Table**:
+   - `corpus_status = 'keep'`: Memes approved by Superadmin for the public Capsule (111 memes).
+   - `corpus_status = 'excluded'`: Memes rejected / discarded by Superadmin (53 memes).
+   - Total Editorial Decisions: 164.
+2. **`memes` Table (3-Way Partitioning via `curation_status`)**:
+   - **Active Public Capsule** (`status = 'active'`, `is_active = 1`, `curation_status = 'keep'`): Strictly maps 1-to-1 with authoritative keep decisions (111 memes).
+   - **Superadmin Excluded** (`status = 'archived'`, `is_active = 0`, `curation_status = 'excluded'`): Strictly isolated rejected memes (53 memes). Ineligible for public spawn.
+   - **Uncurated Backlog** (`status = 'archived'`, `is_active = 0`, `curation_status IS NULL`): Memes awaiting curator / judge review (4,947 memes).
+   - Total Corpus: 5,111 memes ($111 + 53 + 4,947 = 5,111$).
+3. **Dashboard & UI Synchronization**:
+   - Superadmin Command Center reports **111 Authoritative Resolved** memes with a dedicated badge for **53 Excluded**.
+   - `/admin` top stats bar displays **Total (5,111)**, **Active (111)**, **Excluded (53)**, **Archived (4,947)**, and **Drafts (0)**.
+   - Filtering by `[EXCLUDED]` in `/admin` renders the 53 rejected items with bright red `EXCLUDED` badges, distinct from general backlog items.
+4. **Migrations**:
+   - **Migration 011 (`011_reconcile_active_and_curation_sync.sql`)**: Eliminated drift by enforcing $\text{status} = \text{'active'} \iff \text{is\_active} = 1$.
+   - **Migration 012 (`012_add_curation_status_to_memes.sql`)**: Added `curation_status` column to `memes`, backfilling `'keep'` (111) and `'excluded'` (53) from `meme_curation_final` while leaving uncurated backlog items as `NULL`. Automatically maintained on all future superadmin single and bulk resolutions.
 
 ## Google Drive Workflow
 

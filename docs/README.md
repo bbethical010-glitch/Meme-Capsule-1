@@ -4,20 +4,49 @@ A high-performance, minimalist curated meme platform built with **Vite + React +
 
 **GitHub Repo:** [https://github.com/editorav010-dev/Meme-Capsule](https://github.com/editorav010-dev/Meme-Capsule)
 
-## Ecosystem Overview: Public Product vs. Internal Systems
+## Development Team & Engineering Division
 
-Meme Capsule operates across two distinct codebases:
-1. **Public / Mass-Audience Product**: Maintained in a companion Android repository (`com.meme.capsule`). Features Capacitor 8 Android app, `HIT ME` single-item drops, 7-meme FIFO prefetch buffer, native Android Scoped MediaStore image saving, Mood Boards, Meme Vault, AdMob monetization, and Google Play billing. Public promotional web presence is at `https://memecapsule.wtf/`.
-2. **Developer / Internal Backend (This Repository)**: Deployed on Cloudflare Pages (`https://meme-capsule-eww.pages.dev`). Serves the serverless API (`functions/api/`), Cloudflare D1/R2 storage, and the internal Neo-Brutalist workbenches (`/curate`, `/admin`, `/reports`, `/ai-judge`, `/categorise`). The discontinued legacy root landing UI has been completely removed.
+Meme Capsule is a collaborative project developed by three individuals with distinct and complementary ownership areas:
 
-## Core Documentation Index
+- **Anmol Verma** (Lead Backend Developer — GitHub: [`editorav010-dev`](https://github.com/editorav010-dev)):
+  Full backend engineering, Cloudflare serverless architecture, core algorithms, AI tools implementation, security, curation pipelines, and all internal backend workbenches (/admin, /curate, /reports, /ai-judge).
 
-- [`docs/MEME_CAPSULE_APP_KNOWLEDGE.md`](./MEME_CAPSULE_APP_KNOWLEDGE.md) — Master product & technical specification, core product FAQs, and system architecture.
-- [`docs/PRIVACY_COOKIES_AND_DATA_FLOWS.md`](./PRIVACY_COOKIES_AND_DATA_FLOWS.md) — Exhaustive audit of website cookies, Formspree contact form, GA4 telemetry, AdMob integration, and Google Play Data Safety declarations.
-- [`docs/DATABASE.md`](./DATABASE.md) — Cloudflare D1 SQLite database schemas, migrations, and R2 media bucket architecture.
-- [`docs/PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) — Detailed directory mapping, route mappings, and component hierarchy.
-- [`docs/CHANGELOG.md`](./CHANGELOG.md) — Release history and migration milestones.
-- [`docs/CLAUDE.md`](./CLAUDE.md) — Local development, Wrangler commands, and environment settings.
+- **Pratham Pandey** (Lead Frontend Developer & Original Ideator — GitHub: [`bbethical010-glitch`](https://github.com/bbethical010-glitch)):
+  Original concept and founding idea behind Meme Capsule. Leads frontend landing pages, Android APK development (com.meme.capsule), app theme and typography, UI/UX, Java Android bridge, MediaStore integrations, and consumer-facing client setup.
+
+- **Faraz Ahmed** (Social Media & Marketing Lead):
+  Manages all official social media handles, content planning, niche analysis, scripting, quality control, and marketing campaigns.
+
+**Official App Email (User Support & Marketing):** `support@memecapsule.wtf`
+
+**Official Social Media:**
+- Instagram: https://www.instagram.com/capsule.meme/
+- X: https://x.com/memecapsule_
+- Threads: https://www.threads.com/@capsule.meme
+
+## Ecosystem Overview: Three Decoupled Codebases
+
+Meme Capsule operates across three decoupled codebases:
+1. **Public Android Mobile Application (`com.meme.capsule`)**: Maintained in a companion Android repository. Features Capacitor 8 Android app, `HIT ME` single-item drops, 7-meme FIFO prefetch buffer, native Android Scoped MediaStore image saving, Mood Boards, Meme Vault, AdMob monetization, and Google Play In-App Purchases.
+2. **Promotional, Press & Web Platform (`memecapsule.wtf`)**: Multi-page, statically prerendered web platform featuring live interactive drop preview simulator, 3D device mockups, Section 04.5 Under the Hood technical transparency, Press Kit, and Google AdSense (`meme1`).
+3. **Developer / Serverless Edge Backend (This Repository)**: Deployed on Cloudflare Pages (`https://meme-capsule-eww.pages.dev`). Serves the serverless API (`functions/api/`), Cloudflare D1/R2 storage, and the internal Neo-Brutalist workbenches (`/curate`, `/admin`, `/reports`, `/ai-judge`, `/categorise`). The discontinued legacy root landing UI has been completely removed.
+
+## Core Documentation Index (All Documentation Lives in `/docs`)
+
+- [`STATE.md`](./STATE.md) — Current implementation snapshot, active production status, and live endpoints.
+- [`AGENT_RULES.md`](./AGENT_RULES.md) — Mandatory operating guidelines, protected areas, and testing protocols.
+- [`MEME_CAPSULE_KNOWLEDGE.md`](./MEME_CAPSULE_KNOWLEDGE.md) — Master product & technical specification, core product FAQs, and multi-codebase architecture.
+- [`PRIVACY_COOKIES_AND_DATA_FLOWS.md`](./PRIVACY_COOKIES_AND_DATA_FLOWS.md) — Exhaustive audit of website cookies, Formspree contact form, GA4 telemetry, AdMob integration, and Google Play Data Safety declarations.
+- [`DATABASE.md`](./DATABASE.md) — Cloudflare D1 SQLite database schemas, 13 migrations, and R2 media bucket architecture.
+- [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) — Detailed directory mapping, route mappings, and component hierarchy.
+- [`README_ANALYTICS.md`](./README_ANALYTICS.md) — Analytics tracking SDK, ingestion API, and worker aggregation pipeline.
+- [`report.md`](./report.md) — Google Lighthouse audit analysis, Core Web Vitals, accessibility, and backend caching remediation report.
+- [`CHANGELOG.md`](./CHANGELOG.md) — Release history and migration milestones.
+- [`CLAUDE.md`](./CLAUDE.md) — Local development, Wrangler commands, and environment settings.
+- [`AGENTS.md`](./AGENTS.md) — AI agent workflow summary.
+- [`GEMINI.md`](./GEMINI.md) — Project context for Gemini models.
+- [`planning/`](./planning/) — Architecture planning documents, roadmaps, and specifications.
+- [`scripts/`](./scripts/) — Setup and utility guide documentation.
 
 ## What Is Implemented In This Repository
 

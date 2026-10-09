@@ -262,6 +262,31 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       ) ||
       "";
 
+    // 5. Fetch Judge 4 and Judge 5 judgements for this meme
+    const aiRows = await env.DB.prepare(`
+      SELECT * FROM meme_curation 
+      WHERE meme_id = ? AND user_id IN ('user-judge4', 'user-judge5')
+    `).bind(targetMeme.id).all();
+
+    const judge4Row = aiRows.results.find((r: any) => r.user_id === 'user-judge4');
+    const judge5Row = aiRows.results.find((r: any) => r.user_id === 'user-judge5');
+
+    const formatAiCuration = (r: any) => {
+      if (!r || !r.corpus_status) return null;
+      return {
+        corpus_status: r.corpus_status,
+        duplicate_of: r.duplicate_of,
+        topics: parseJsonArray(r.topics),
+        tone: r.tone,
+        humour_mechanisms: parseJsonArray(r.humour_mechanisms),
+        curator_note: r.curator_note,
+        user_id: r.user_id,
+        user_name: r.user_name,
+        reviewed_at: r.reviewed_at,
+        updated_at: r.updated_at,
+      };
+    };
+
     return json({
       meme: {
         id: targetMeme.id,
@@ -274,6 +299,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
         // AI pre-judge suggestion. Read-only; does not affect curation.
         ai_prediction: buildAIPrediction(targetMeme),
+
+        // AI Judge 4 and 5 judgements
+        ai_judgements: {
+          judge4: formatAiCuration(judge4Row),
+          judge5: formatAiCuration(judge5Row)
+        }
       },
 
       stats: {

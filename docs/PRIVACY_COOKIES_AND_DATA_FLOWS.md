@@ -5,8 +5,12 @@
 > **App / System:** Meme Capsule  
 > **Android Package Identifier:** `com.meme.capsule`  
 > **Public Web Presence:** [https://memecapsule.wtf/](https://memecapsule.wtf/)  
-> **Serverless API Base:** [https://meme-capsule-eww.pages.dev](https://meme-capsule-eww.pages.dev)  
-> **Last Verified:** September 2026  
+> **Project Team:**  
+> - **Anmol Verma** (Lead Backend Developer — `editorav010-dev`)  
+> - **Pratham Pandey** (Lead Frontend Developer & Original Ideator — `bbethical010-glitch`)  
+> - **Faraz Ahmed** (Social Media & Marketing Lead)  
+> **Official App Email (User Support & Marketing):** `support@memecapsule.wtf`  
+> **Last Verified:** October 2026  
 > **Status:** Production Reference  
 
 ---
@@ -76,7 +80,9 @@ The landing site features a contact and support form in Section `07 — GET IN T
 - **Service Provider:** [Formspree Inc.](https://formspree.io)
 - **Endpoint URL:** `https://formspree.io/f/xwlenwzr`
 - **Form Action:** Direct HTTP `POST` submission.
-- **Target Recipient:** Developer inbox (`bbethical010@gmail.com`).
+- **Target Recipients:**
+  - Official User Support, App & Technical inquiries: `support@memecapsule.wtf`
+  - Backup & Operations inbox: `memecapsule.app@gmail.com`
 - **Data Collected:**
   1. `name` (*Required, text*): Name provided by the user.
   2. `email` (*Required, email*): Return email address for responses.

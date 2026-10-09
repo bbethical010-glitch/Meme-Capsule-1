@@ -80,6 +80,10 @@ export interface CurateMemeItem {
     error: string | null;
     updated_at: string | null;
   } | null;
+  ai_judgements?: {
+    judge4?: CuratedMemeData | null;
+    judge5?: CuratedMemeData | null;
+  };
 }
 
 export interface CurationCounts {

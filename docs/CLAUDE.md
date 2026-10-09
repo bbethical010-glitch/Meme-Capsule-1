@@ -1,65 +1,52 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> **CRITICAL**: Before modifying this repository, read and follow [`AGENT_RULES.md`](./AGENT_RULES.md).
+
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## Development Setup
 
 1. **Install Dependencies**:
-   `npm install` - Installs all required packages including TypeScript, React, and build tools.
+   `npm install` - Installs all dependencies (Vite 6, React 19, TypeScript 5.7, Cloudflare Workers Types).
 
 2. **Start Development Server**:
-   `npm run dev` - Launch Vite development server (assumes `vite` is configured in package.json).
+   `npm run dev` - Launches the Vite development server on `127.0.0.1:5173`. Serves the internal tool suites (`/curate`, `/admin`, `/reports`, `/ai-judge`, `/categorise`).
 
 3. **Build Production Bundle**:
-   `npm run build` - Generates optimized production assets using Rollup/Babel (based on node_modules configuration).
+   `npm run build` - Executes `tsc && vite build` to compile TypeScript and generate production assets in `dist/`.
 
-4. **Run Tests**:
-   `npm test` - Executes Jest/Hairstandard tests (configured in Jest configuration files).
+4. **Preview Production Build**:
+   `npm run preview` - Previews the production build locally via Vite preview server.
 
-5. **Lint Code**:
-   `npm run lint` - Runs ESLint/TypeScript linter (configured in .eslintrc and tsconfig.json).
+5. **Run with Cloudflare Bindings (Wrangler)**:
+   ```bash
+   npm run build
+   npx wrangler pages dev dist
+   ```
+   Tests D1 database (`DB`) and R2 storage (`MEMES_BUCKET`) bindings locally.
 
-6. **Hot Reload**:
-   `npm run watch` - Enables file watcher for TypeScript and React code changes.
+6. **Documentation Synchronization**:
+   `npm run docs:sync` - Synchronizes project directory maps in `docs/PROJECT_STRUCTURE.md`.
 
 ## Code Architecture
 
 ### Tech Stack
-- **Frontend**: React 18 with TypeScript
-- **Build Tool**: Vite (with react-refresh support)
-- **Bundler**: Rollup (for production builds)
-- **State Management**: Context API/Public API (no Redux/VRTX indicated)
-- **Utility Libraries**: nanoid for unique IDs, picocolors for styling
+- **Frontend / Internal Workbenches**: React 19, TypeScript, Vite 6
+- **Serverless API**: Cloudflare Pages Functions (`functions/api/`, `functions/reports.ts`)
+- **Database**: Cloudflare D1 (SQLite) with 13 production migrations (`d1/migrations/`)
+- **Object Storage**: Cloudflare R2 bucket (`memes`)
+- **Styling**: Neo-Brutalist Vanilla CSS (`curate.css`, `admin.css`, `cat.css`, `aiJudge.css`)
 
 ### Key Directories
-- `src/`: Main source code with React components and hooks
-- `public/`: Static assets (no build process required)
-- `node_modules/`: Contains all dependencies including:
-  - Vite CLI for dev server
-  - Rollup for bundling
-  - Esbuild for TypeScript compilation
-  - JSDom for testing
+- `src/`: Internal Neo-Brutalist workbenches (`curate/`, `admin/`, `cat/`, `ai/`) and shared utilities
+- `functions/`: Cloudflare Pages Functions API endpoints
+  - `functions/api/`: Public delivery (`random-meme.ts`, `daily-meme.ts`, `like.ts`, `contact.ts`) and Admin APIs
+  - `functions/_shared/`: Native D1/R2 database helpers (`d1r2.ts`), auth (`auth.ts`, `catAuth.ts`), and types
+- `d1/`: D1 schema definitions and migrations (`000` through `012`)
+- `docs/`: Comprehensive project documentation
+- `public/`: Static web assets and manifest
 
-### Build Process
-1. Development: `npm run dev` runs Vite in watch mode with React-Refresh hot reloading
-2. Production: `npm run build` bundles code with Rollup and TypeScript
-3. Testing: `npm test` runs Jest tests with code coverage
-
-## Configuration Files
-- `tsconfig.json`: TypeScript configuration (target ES2020, module ESNext)
-- `package.json`: Scripts for dev/build/test
-- `.eslintrc`: Linting rules (extends airbnb-base with React/jest
-- `vite.config.js`: Configuration for Vite dev server
-
-## Common Patterns
-- Uses `nanoid` for unique meme IDs
-- Components follow context-based structure (e.g. `MemeComponent.tsx`)
-- TypeScript interfaces defined in `/types/` (if exists)
-- JSX syntax with React.FC and hooks
-
-## Commands to Remember
-- `npm start` - Alternative dev command (if defined in package.json)
-- `tsc --build` - For TypeScript compilation
-- `eslint --fix` - Auto-fix linting issues
-- `npm run build` - For production build
-- `npm run test` - For running tests
+## Development Rules
+- Follow all permanent instructions in [`AGENT_RULES.md`](./AGENT_RULES.md).
+- Do not modify past database migrations (`000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`).
+- Always verify changes with `npm run build` before considering any task complete.
