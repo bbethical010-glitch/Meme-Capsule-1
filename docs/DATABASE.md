@@ -2,7 +2,7 @@
 
 ## Current Storage
 
-The project is migrating from Supabase to Cloudflare R2 + D1 for production backend.
+The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 13 production D1 migrations applied from `000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`).
 
 Current storage layers:
 

@@ -10,82 +10,239 @@ Meme Capsule is a minimalist curated meme PWA built with Vite + React + TypeScri
 - **Anmol Verma** (Lead Backend Developer — GitHub: `editorav010-dev`): Backend architecture, core algorithms, AI tools, security & all internal backend workbenches.
 - **Pratham Pandey** (Lead Frontend Developer & Original Ideator — GitHub: `bbethical010-glitch`): Founding concept, APK, web platform, UI/UX & client integrations.
 - **Faraz Ahmed** (Social Media & Marketing Lead): Social handles, content planning & marketing campaigns.  
-**Official App Email:** `memecapsule.app@gmail.com` | **Instagram:** https://www.instagram.com/capsule.meme/ | **X:** https://x.com/memecapsule_ | **Threads:** https://www.threads.com/@capsule.meme
+**Official App Email:** `support@memecapsule.wtf` | **Instagram:** https://www.instagram.com/capsule.meme/ | **X:** https://x.com/memecapsule_ | **Threads:** https://www.threads.com/@capsule.meme
 
 ## Directory Map
 
 <!-- DIRECTORY_MAP_START -->
 ```
 meme application/
-├── .planning                                         # Project planning and roadmap
-│   ├── phases
-│   │   └── 02-cloudflare-r2-d1-backend
-│   │       └── 02-PLAN.md
-│   ├── ROADMAP.md                                    # Phase-by-phase development plan
-│   └── STATE.md                                      # Current project state and next actions
+├── .knowledge
+│   └── .knowledge_meta.json
+├── .nexus
+├── .vscode
+│   └── launch.json
 ├── d1                                                # Cloudflare D1 database (NEW — Phase 2)
-│   └── schema.sql                                    # SQLite schema for meme metadata
+│   ├── migrations
+│   │   ├── 000_complete_setup.sql
+│   │   ├── 002_analytics.sql
+│   │   ├── 003_categorisation.sql
+│   │   ├── 004_ai_judge.sql
+│   │   ├── 004_curation.sql
+│   │   ├── 005_curation_final.sql
+│   │   ├── 006_judge_ai_presets.sql
+│   │   ├── 007_add_judge4_judge5.sql
+│   │   ├── 008_optimize_curation_indexes.sql
+│   │   ├── 009_add_api_password_to_users.sql
+│   │   ├── 010_enforce_superadmin_active_and_cleanup_judges.sql
+│   │   ├── 011_reconcile_active_and_curation_sync.sql
+│   │   └── 012_add_curation_status_to_memes.sql
+│   ├── schema.sql                                    # SQLite schema for meme metadata
+│   └── seed.sql
 ├── docs                                              # Dedicated project documentation folder
+│   ├── planning                                      # Project planning and roadmap (in docs/)
+│   │   ├── AI-SPEC.md
+│   │   └── ROADMAP.md                                # Phase-by-phase development plan
+│   ├── AGENT_RULES.md
+│   ├── AGENTS.md
+│   ├── AI_PREJUDGE_CURATE_ANALYSIS.md
 │   ├── CHANGELOG.md                                  # Version history
 │   ├── CLAUDE.md                                     # Development setup & commands guide
+│   ├── CLOUDFLARE_D1_USAGE_AND_OPTIMIZATION_REPORT.md
+│   ├── CLOUDFLARE_LIMITS_AND_SCALING_RESEARCH.md
 │   ├── DATABASE.md                                   # Database and storage architecture docs
-│   ├── MEME_CAPSULE_KNOWLEDGE.md                     # Master canonical product & architecture spec
-│   ├── PRIVACY_COOKIES_AND_DATA_FLOWS.md             # Privacy, cookies, Formspree, AdMob audit
+│   ├── GEMINI.md
+│   ├── MEME_CAPSULE_KNOWLEDGE.md
+│   ├── PRIVACY_COOKIES_AND_DATA_FLOWS.md
 │   ├── PROJECT_STRUCTURE.md                          # This file
-│   ├── README_ANALYTICS.md                           # Analytics tracking SDK, ingestion & aggregation
+│   ├── README_ANALYTICS.md
 │   ├── README.md                                     # Project overview and setup guide
-│   └── report.md                                     # Google Lighthouse audit & edge optimization report
+│   ├── report.md
+│   └── STATE.md                                      # Current project state and next actions (in docs/)
 ├── functions                                         # Cloudflare Pages Functions (serverless API)
 │   ├── _shared                                       # Shared utilities for all API routes
+│   │   ├── aiJudgeAuth.ts
+│   │   ├── analyticsCache.ts
+│   │   ├── analyticsFormulas.ts
+│   │   ├── catAuth.ts
+│   │   ├── catConsensus.ts
+│   │   ├── crypto.ts
+│   │   ├── curateDb.ts
 │   │   ├── d1r2.ts                                   # D1 + R2 helper (NEW — replaces supabase.ts)
 │   │   ├── fallbackMemes.ts                          # Static fallback memes for offline/empty DB
-│   │   ├── pages.ts                                  # Cloudflare Pages type definitions
-│   │   └── supabase.ts                               # OLD Supabase REST client (being replaced)
-│   └── api                                           # API route handlers
-│       ├── admin                                     # Admin dashboard
-│       │   ├── memes.ts                              # GET/POST/PATCH/DELETE /api/admin/memes
-│       │   ├── sync-r2.ts                            # POST /api/admin/sync-r2 (R2→D1 sync)
-│       │   └── upload.ts                             # POST /api/admin/upload
-│       ├── daily-meme.ts                             # GET /api/daily-meme — public
-│       ├── like.ts
-│       └── random-meme.ts                            # GET /api/random-meme — public
+│   │   └── pages.ts                                  # Cloudflare Pages type definitions
+│   ├── api                                           # API route handlers
+│   │   ├── admin                                     # Admin dashboard
+│   │   │   ├── ai
+│   │   │   │   └── override.ts
+│   │   │   ├── analytics
+│   │   │   │   ├── meme
+│   │   │   │   │   └── [memeId].ts
+│   │   │   │   ├── insights.ts
+│   │   │   │   ├── overview.ts
+│   │   │   │   ├── rankings.ts
+│   │   │   │   ├── recalculate.ts
+│   │   │   │   ├── reset.ts
+│   │   │   │   └── trends.ts
+│   │   │   ├── memes
+│   │   │   │   └── hard-delete.ts
+│   │   │   ├── ai-categorise.ts
+│   │   │   ├── ai-comparison.ts
+│   │   │   ├── ai-stats.ts
+│   │   │   ├── memes.ts                              # GET/POST/PATCH/DELETE /api/admin/memes
+│   │   │   ├── sql.ts
+│   │   │   ├── sync-r2.ts                            # POST /api/admin/sync-r2 (R2→D1 sync)
+│   │   │   └── upload.ts                             # POST /api/admin/upload
+│   │   ├── ai-judge
+│   │   │   ├── run
+│   │   │   │   ├── progress.ts
+│   │   │   │   ├── start.ts
+│   │   │   │   └── stop.ts
+│   │   │   ├── classify.ts
+│   │   │   ├── config.ts
+│   │   │   ├── login.ts
+│   │   │   ├── logout.ts
+│   │   │   ├── next-meme.ts
+│   │   │   └── runs.ts
+│   │   ├── cat
+│   │   │   ├── admin                                 # Admin dashboard
+│   │   │   │   ├── reset.ts
+│   │   │   │   └── users.ts
+│   │   │   ├── analytics
+│   │   │   │   ├── confirm.ts
+│   │   │   │   ├── memes.ts                          # GET/POST/PATCH/DELETE /api/admin/memes
+│   │   │   │   └── overview.ts
+│   │   │   ├── meme
+│   │   │   │   └── [memeId].ts
+│   │   │   ├── decide.ts
+│   │   │   ├── login.ts
+│   │   │   ├── logout.ts
+│   │   │   ├── me.ts
+│   │   │   └── next.ts
+│   │   ├── curate
+│   │   │   ├── super
+│   │   │   │   ├── bulk-resolve.ts
+│   │   │   │   ├── export.ts
+│   │   │   │   ├── memes.ts                          # GET/POST/PATCH/DELETE /api/admin/memes
+│   │   │   │   ├── resolve.ts
+│   │   │   │   └── summary.ts
+│   │   │   ├── account.ts
+│   │   │   ├── ai-presets.ts
+│   │   │   ├── ai-proxy.ts
+│   │   │   ├── export.ts
+│   │   │   ├── list.ts
+│   │   │   ├── next.ts
+│   │   │   ├── save.ts
+│   │   │   └── stats.ts
+│   │   ├── contact.ts
+│   │   ├── daily-meme.ts                             # GET /api/daily-meme — public
+│   │   ├── events.ts
+│   │   ├── like.ts
+│   │   ├── likes.ts
+│   │   ├── random-meme.ts                            # GET /api/random-meme — public
+│   │   └── report.ts
+│   └── reports.ts
+├── functions-dist
+│   └── index.js
 ├── public                                            # Static assets served directly
 │   ├── _headers                                      # Cloudflare Pages custom headers
 │   ├── icon.svg                                      # PWA icon
 │   ├── manifest.webmanifest                          # PWA manifest
-│   └── sw.js                                         # Service worker self-termination script
+│   └── sw.js                                         # Service worker for offline support
 ├── src                                               # Frontend source code
-│   ├── admin                                         # Admin dashboard (/admin)
+│   ├── admin                                         # Admin dashboard
+│   │   ├── ai
+│   │   │   ├── aiApi.ts
+│   │   │   ├── AiComparison.tsx
+│   │   │   ├── AiOverrideDrawer.tsx
+│   │   │   ├── AiOverview.tsx
+│   │   │   ├── AiTab.tsx
+│   │   │   └── categories.ts
+│   │   ├── analytics-dashboard
+│   │   │   ├── AnalyticsDashboard.tsx
+│   │   │   ├── InsightsList.tsx
+│   │   │   ├── MemeDetail.tsx
+│   │   │   ├── Overview.tsx
+│   │   │   ├── Rankings.tsx
+│   │   │   └── TrendChart.tsx
+│   │   ├── sql-runner
+│   │   │   └── SqlRunner.tsx
 │   │   ├── admin.css                                 # Admin-specific styles
-│   │   └── AdminApp.tsx                              # Admin UI component
-│   ├── curate                                        # Curation & SuperAdmin portal (/curate)
-│   │   ├── curate.css                                # Curation Neo-Brutalist styles
-│   │   └── CurateApp.tsx                             # Multi-judge curation workbench
-│   ├── ai-judge                                      # AI Pre-Judge assisted loop (/ai-judge)
-│   ├── categorise                                    # Judge categorization portal (/categorise)
+│   │   ├── AdminApp.tsx                              # Admin UI component
+│   │   └── AdminGate.tsx
+│   ├── ai-judge
+│   │   ├── aiJudge.css
+│   │   ├── aiJudgeApi.ts
+│   │   └── AiJudgeApp.tsx
+│   ├── analytics
+│   │   ├── analyticsFlush.ts
+│   │   ├── analyticsQueue.ts
+│   │   ├── analyticsTypes.ts
+│   │   ├── deviceId.ts
+│   │   ├── index.ts
+│   │   └── useAnalytics.ts
+│   ├── categorise
+│   │   ├── superadmin
+│   │   │   ├── CategoryDistribution.tsx
+│   │   │   ├── JudgeProgress.tsx
+│   │   │   ├── MemeComparisonTable.tsx
+│   │   │   └── SuperDashboard.tsx
+│   │   ├── cat.css
+│   │   ├── catApi.ts
+│   │   ├── CatApp.tsx
+│   │   ├── CatComplete.tsx
+│   │   ├── CatInterface.tsx
+│   │   ├── CatLogin.tsx
+│   │   ├── catTypes.ts
+│   │   └── useCatAuth.ts
+│   ├── curate
+│   │   ├── ai-judge
+│   │   │   ├── aiJudgeClient.ts
+│   │   │   ├── AiJudgeConsole.tsx
+│   │   │   ├── aiJudgePrompt.ts
+│   │   │   ├── aiJudgeTypes.ts
+│   │   │   └── useAiJudgeLoop.ts
+│   │   ├── super
+│   │   │   ├── curateSuperApi.ts
+│   │   │   ├── CurateSuperDashboard.tsx
+│   │   │   ├── CuratorComparisonTable.tsx
+│   │   │   └── CuratorResolveModal.tsx
+│   │   ├── AiPreJudgePanel.tsx
+│   │   ├── CategorizationPanel.tsx
+│   │   ├── curate.css
+│   │   ├── CurateAccountModal.tsx
+│   │   ├── curateApi.ts
+│   │   ├── CurateApp.tsx
+│   │   ├── CurateLogin.tsx
+│   │   ├── curateTypes.ts
+│   │   ├── CurationStatsModal.tsx
+│   │   └── EditorialButtons.tsx
 │   ├── data                                          # Static data
 │   │   └── fallbackMemes.ts                          # Static fallback memes for offline/empty DB
 │   ├── lib                                           # Utility modules
 │   │   ├── adminApi.ts                               # Frontend → admin API client
 │   │   ├── adminCollection.ts                        # Local admin collection (localStorage)
-│   │   ├── localState.ts                             # Local device state
+│   │   ├── localState.ts                             # Local device state (favorites, LOLs)
 │   │   └── memeApi.ts                                # Frontend → public meme API client
-│   ├── base.css                                      # Minimal base reset for dark tools
+│   ├── base.css
 │   ├── main.tsx                                      # React entry point and router
 │   ├── types.ts                                      # TypeScript type definitions (Meme, Rarity, etc.)
 │   └── vite-env.d.ts                                 # Vite environment type augmentation
-├── supabase                                          # OLD Supabase schema (being replaced by d1/)
-│   ├── README.md                                     # Project overview and setup guide
-│   └── schema.sql                                    # SQLite schema for meme metadata
+├── workers
+│   └── analyticsAggregator.ts
 ├── .dev.vars
+├── .dev.vars.example                                 # Environment variable template
+├── .env
 ├── .gitignore                                        # Git ignore rules
-├── CLAUDE.md                                         # Development setup & commands guide
+├── converted.pdf
+├── fetch-knowledge.ps1
 ├── index.html                                        # HTML entry point
 ├── package-lock.json                                 # Locked dependency tree
 ├── package.json                                      # Dependencies and scripts
-├── README.md                                         # Project overview and setup guide
+├── stitch_admin.html
 ├── tsconfig.functions.json
 ├── tsconfig.json                                     # TypeScript configuration
+├── update-knowledge.ps1
 ├── vite.config.ts                                    # Vite build configuration
 └── wrangler.toml                                     # Cloudflare Workers/Pages config (NEW — Phase 2)
 ```

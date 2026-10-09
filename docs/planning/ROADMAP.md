@@ -116,49 +116,41 @@ Acceptance criteria:
 - `npm.cmd run build` still passes.
 - Admin dashboard works with the new backend.
 
-## Phase 3: Launch Prep + Performance Polish — Active
+## Phase 3: Launch Prep + Performance Polish — Complete
 
-Status: ACTIVE
+Status: COMPLETE (Deployed to Production)
 
-Goal: Prepare the PWA for public sharing while staying on free infrastructure.
+Goal: Prepare the PWA for public sharing while staying on free tier edge infrastructure.
 
 Delivered:
 
-- Deployed to Cloudflare Pages with D1 + R2 bindings.
-- Environment variables (`ADMIN_API_TOKEN`, `R2_PUBLIC_URL`) configured.
+- Deployed to Cloudflare Pages with D1 + R2 native edge bindings (`meme-capsule-eww.pages.dev`).
+- Environment variables (`ADMIN_API_TOKEN`, `R2_PUBLIC_URL`, `JWT_SECRET`, etc.) configured.
 - R2-to-D1 sync feature: `POST /api/admin/sync-r2` scans R2 bucket and auto-creates D1 records for untracked files.
 - Admin dashboard "Sync R2 Files to D1" button for bulk-importing memes uploaded directly to R2.
 - Real-time global like/unlike system with SQLite (D1) database integration, client-side pre-liked state caching, and live count syncing.
+- Mobile, tablet, and desktop responsive validation with native Web Share Sheet API and fallback download triggers.
+- Privacy policy, cookie disclosure, content disclaimer, and structured data flows documented.
+- Edge caching headers (`stale-while-revalidate`, immutable assets) and PWA manifest configuration.
 
-Remaining tasks:
+## Phase 4: Production Workbenches & Feature Expansion — Delivered / Ongoing
 
-- Test on Android Chrome, iOS Safari, desktop Chrome, and narrow mobile widths.
-- Verify native share sheet behavior where supported.
-- Verify download/save fallback behavior.
-- Add or confirm privacy policy and content disclaimer.
-- Confirm caching headers and PWA install behavior.
+Status: DELIVERED (Operational in Production)
 
-Acceptance criteria:
+Delivered features:
 
-- Public URL works.
-- Random meme flow is fast on mobile data.
-- No layout overlap at common viewport sizes.
-- PWA can be installed on supported browsers.
-- Files uploaded directly to R2 can be synced to D1 via admin dashboard.
+- Admin Authentication & Role Management: Admin token session gate with SuperAdmin credential resolution and bcrypt hashing.
+- Five Admin Workbenches: Meme Library, Upload & Metadata Editor, R2 Storage Sync, Submissions Moderation Queue, and Analytics/Telemetry.
+- AI Pre-Judge & Curation Pipeline: Curation statuses (`curation_status` from migration 012), automated scoring, and moderation workflows.
+- User Vault & Interactions: Local favorites/saved memes, reaction counts, pre-cached likes, and offline vault persistence.
+- Public APIs: Contact submission (`POST /api/contact`), telemetry logging (`POST /api/analytics/events`), random/daily drops, and like/unlike endpoints.
+- Native Android Client: Full native Android companion app (Kotlin, Jetpack Compose, Material 3, Retrofit) v3.3 maintained in dedicated repository.
 
-## Phase 4: Optional Growth Features
+Ongoing & Future Backlog:
 
-Status: BACKLOG
-
-Only add these if the core loop proves fun:
-
-- Tiny local favorites gallery.
-- Daily Drop history.
-- Better rarity presentation.
-- Cloudinary integration for advanced image transformations if needed.
-- Lightweight admin auth (e.g., Cloudflare Access or simple password gate).
-- Community submissions only with manual review, reporting, and moderation.
-- Android wrapper using Capacitor or Trusted Web Activity after traction.
+- Advanced multi-tenant role hierarchies if team scales.
+- Direct Cloudflare Images/Workers AI on-the-fly thumbnail generation.
+- Automated daily drop scheduling via Cloudflare Cron Triggers.
 
 ## Non-Goals
 
