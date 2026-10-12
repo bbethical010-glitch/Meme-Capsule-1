@@ -80,6 +80,7 @@ export default function CurateApp() {
   const [showForceRemoveModal, setShowForceRemoveModal] = useState<boolean>(false);
   const [forceRemoveReason, setForceRemoveReason] = useState<string>("");
   const [forceRemoveLoading, setForceRemoveLoading] = useState<boolean>(false);
+  const [nsfwLoading, setNsfwLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "warning" | "error" } | null>(null);
 
   useEffect(() => {
@@ -632,6 +633,27 @@ export default function CurateApp() {
             <option value="all">All Corpus</option>
           </select>
 
+          <button
+            type="button"
+            onClick={handleToggleNsfw}
+            disabled={nsfwLoading}
+            style={{
+              background: currentMeme?.is_nsfw ? "#dd0061" : "#1c1b1b",
+              border: "2px solid #dd0061",
+              color: "#fff",
+              padding: "4px 10px",
+              fontSize: "11px",
+              fontFamily: "Oswald, sans-serif",
+              fontWeight: "bold",
+              cursor: nsfwLoading ? "not-allowed" : "pointer",
+              opacity: nsfwLoading ? 0.6 : 1,
+              boxShadow: nsfwLoading ? "none" : "2px 2px 0px #dd0061",
+              letterSpacing: "0.5px"
+            }}
+            title="Toggle NSFW moderation tag"
+          >
+            {nsfwLoading ? "SAVING..." : currentMeme?.is_nsfw ? "✓ NSFW TAGGED" : "⚠ TAG NSFW"}
+          </button>
           <button
             type="button"
             onClick={() => loadMeme(currentMeme?.id)}

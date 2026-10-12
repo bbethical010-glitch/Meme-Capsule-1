@@ -25,6 +25,7 @@ export type D1MemeRow = {
   source_link: string | null;
   category: string | null;
   tags: string | null;
+  is_nsfw: number;
   rarity: string | null;
   status: string | null;
   curation_status?: string | null;
@@ -124,7 +125,7 @@ export const getRandomMeme = async (env: Env): Promise<Meme | null> => {
   const { results } = await env.DB.prepare(
     `SELECT m.* FROM memes m
      INNER JOIN meme_curation_final f ON m.id = f.meme_id
-     WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived') AND m.random_key >= ?
+     WHERE m.is_active = 1 AND m.is_nsfw = 0 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived') AND m.random_key >= ?
      ORDER BY m.random_key ASC LIMIT 1`
   ).bind(randomKey).all<D1MemeRow>();
 
@@ -134,7 +135,7 @@ export const getRandomMeme = async (env: Env): Promise<Meme | null> => {
     const wrap = await env.DB.prepare(
       `SELECT m.* FROM memes m
        INNER JOIN meme_curation_final f ON m.id = f.meme_id
-       WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived')
+       WHERE m.is_active = 1 AND m.is_nsfw = 0 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived')
        ORDER BY m.random_key ASC LIMIT 1`
     ).all<D1MemeRow>();
     row = wrap.results[0];
@@ -150,7 +151,7 @@ export const getDailyMeme = async (env: Env): Promise<Meme | null> => {
   const { results } = await env.DB.prepare(
     `SELECT m.* FROM memes m
      INNER JOIN meme_curation_final f ON m.id = f.meme_id
-     WHERE m.is_active = 1 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived')
+     WHERE m.is_active = 1 AND m.is_nsfw = 0 AND m.status = 'active' AND f.corpus_status = 'keep' AND (m.category IS NULL OR LOWER(m.category) != 'archived')
      ORDER BY m.uploaded_at DESC LIMIT 50`
   ).all<D1MemeRow>();
 

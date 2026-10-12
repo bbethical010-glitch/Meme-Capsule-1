@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
     // Total active memes
     const totalResult = await env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM memes WHERE is_active = 1"
+      "SELECT COUNT(*) as cnt FROM memes WHERE is_active = 1 AND is_nsfw = 0"
     ).first<{ cnt: number }>();
     const total = totalResult?.cnt ?? 0;
 
@@ -37,6 +37,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       SELECT m.id, m.image_url, m.title, m.storage_path
       FROM memes m
       WHERE m.is_active = 1
+        AND m.is_nsfw = 0
         AND m.id NOT IN (
           SELECT meme_id FROM cat_decisions
           WHERE user_id = ?

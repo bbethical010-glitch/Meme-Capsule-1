@@ -20,7 +20,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     await requireAuth(request, env, "superadmin");
 
     const totalMemesRes = await env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM memes WHERE is_active = 1"
+      "SELECT COUNT(*) as cnt FROM memes WHERE is_active = 1 AND is_nsfw = 0"
     ).first<{ cnt: number }>();
     const totalMemes = totalMemesRes?.cnt ?? 0;
 
