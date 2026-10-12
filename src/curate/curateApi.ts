@@ -67,10 +67,10 @@ export async function setMemeNsfw(
   memeId: string,
   isNsfw: boolean
 ): Promise<{ success: boolean; meme_id: string; is_nsfw: boolean }> {
-  const res = await fetch("/api/curate/nsfw", {
+  const res = await fetch("/api/curate/save", {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ meme_id: memeId, is_nsfw: isNsfw })
+    body: JSON.stringify({ meme_id: memeId, moderation_only: true, is_nsfw: isNsfw })
   });
   return handleResponse(res);
 }
