@@ -7,7 +7,7 @@ import {
   type CorpusStatus,
   type CuratorUser
 } from "./curateTypes";
-import { fetchNextMeme, saveCuration } from "./curateApi";
+import { fetchNextMeme, saveCuration, setMemeNsfw } from "./curateApi";
 import { catForceRemove } from "../categorise/catApi";
 import EditorialButtons from "./EditorialButtons";
 import CategorizationPanel from "./CategorizationPanel";
@@ -81,6 +81,7 @@ export default function CurateApp() {
   const [showForceRemoveModal, setShowForceRemoveModal] = useState<boolean>(false);
   const [forceRemoveReason, setForceRemoveReason] = useState<string>("");
   const [forceRemoveLoading, setForceRemoveLoading] = useState<boolean>(false);
+  const [nsfwLoading, setNsfwLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "warning" | "error" } | null>(null);
 
   useEffect(() => {
@@ -361,6 +362,22 @@ export default function CurateApp() {
     }
   }, [token, forceRemoveReason, loadMeme]);
 
+  const handleToggleNsfw = useCallback(async () => {
+    const meme = stateRef.current.currentMeme;
+    if (!meme || nsfwLoading) return;
+    const nextValue = !meme.is_nsfw;
+    setNsfwLoading(true);
+    try {
+      await setMemeNsfw(meme.id, nextValue);
+      setCurrentMeme((current) => current && current.id === meme.id ? { ...current, is_nsfw: nextValue } : current);
+      setToast({ message: nextValue ? "NSFW TAG ADDED" : "NSFW TAG REMOVED", type: "success" });
+    } catch (err: unknown) {
+      setToast({ message: err instanceof Error ? err.message : "Failed to update NSFW tag", type: "error" });
+    } finally {
+      setNsfwLoading(false);
+    }
+  }, [nsfwLoading]);
+
   // Conflict-free Keyboard Event Listener (Active only in Judge view)
   useEffect(() => {
     if (viewMode !== "judge") return;
@@ -593,6 +610,27 @@ export default function CurateApp() {
             <option value="all">All Corpus</option>
           </select>
 
+          <button
+            type="button"
+            onClick={handleToggleNsfw}
+            disabled={nsfwLoading}
+            style={{
+              background: currentMeme?.is_nsfw ? "#dd0061" : "#1c1b1b",
+              border: "2px solid #dd0061",
+              color: "#fff",
+              padding: "4px 10px",
+              fontSize: "11px",
+              fontFamily: "Oswald, sans-serif",
+              fontWeight: "bold",
+              cursor: nsfwLoading ? "not-allowed" : "pointer",
+              opacity: nsfwLoading ? 0.6 : 1,
+              boxShadow: nsfwLoading ? "none" : "2px 2px 0px #dd0061",
+              letterSpacing: "0.5px"
+            }}
+            title="Toggle NSFW moderation tag"
+          >
+            {nsfwLoading ? "SAVING..." : currentMeme?.is_nsfw ? "✓ NSFW TAGGED" : "⚠ TAG NSFW"}
+          </button>
           <button
             type="button"
             onClick={() => loadMeme(currentMeme?.id)}

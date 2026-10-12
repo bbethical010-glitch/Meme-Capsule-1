@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS memes (
   source_link TEXT,
   category TEXT NOT NULL DEFAULT 'Unsorted',
   tags TEXT NOT NULL DEFAULT '[]',
+  is_nsfw INTEGER NOT NULL DEFAULT 0 CHECK (is_nsfw IN (0, 1)),
   rarity TEXT NOT NULL DEFAULT 'Common' CHECK (rarity IN ('Common', 'Rare', 'Legendary')),
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('active', 'draft', 'archived')),
   media_type TEXT NOT NULL DEFAULT 'image' CHECK (media_type IN ('image', 'video')),

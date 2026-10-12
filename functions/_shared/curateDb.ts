@@ -1,5 +1,6 @@
 let tablesInitialized = false;
 let apiPasswordColumnChecked = false;
+let nsfwColumnChecked = false;
 
 // SHA-256 of "changeme123"
 const DEFAULT_PASS_HASH = "494a715f7e9b4071aca61bac42ca858a309524e5864f0920030862a4ae7589be";
@@ -18,11 +19,22 @@ export async function ensureApiPasswordColumn(db: D1Database): Promise<void> {
   apiPasswordColumnChecked = true;
 }
 
+export async function ensureNsfwColumn(db: D1Database): Promise<void> {
+  if (nsfwColumnChecked) return;
+  try {
+    await db.prepare("ALTER TABLE memes ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 0").run();
+  } catch {
+    // Ignore if column already exists.
+  }
+  nsfwColumnChecked = true;
+}
+
 /**
  * Ensures that all necessary tables and default judge accounts exist in D1 automatically.
  */
 export async function ensureCurationTables(db: D1Database): Promise<void> {
   await ensureApiPasswordColumn(db);
+  await ensureNsfwColumn(db);
 
   if (tablesInitialized) return;
 
@@ -232,4 +244,3 @@ export async function ensureForceRemovalsTable(db: D1Database): Promise<void> {
     console.error("Warning: could not auto-initialize force removals table:", err);
   }
 }
-

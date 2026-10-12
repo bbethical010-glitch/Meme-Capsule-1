@@ -63,6 +63,15 @@ export async function saveCuration(payload: {
   return handleResponse(res);
 }
 
+export async function setMemeNsfw(memeId: string, isNsfw: boolean): Promise<{ success: boolean; meme_id: string; is_nsfw: boolean }> {
+  const res = await fetch("/api/curate/nsfw", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ meme_id: memeId, is_nsfw: isNsfw })
+  });
+  return handleResponse(res);
+}
+
 export async function fetchCurationStats(): Promise<CurationStatsResponse> {
   const res = await fetch("/api/curate/stats", {
     headers: getAuthHeaders(),

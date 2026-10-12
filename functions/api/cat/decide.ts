@@ -29,14 +29,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     // Guard: if meme has been force-removed, return 410
     const memeStatus = await env.DB.prepare(
-      "SELECT is_active FROM memes WHERE id = ?"
-    ).bind(memeId).first<{ is_active: number }>();
+      "SELECT is_active, is_nsfw FROM memes WHERE id = ?"
+    ).bind(memeId).first<{ is_active: number; is_nsfw: number }>();
 
     if (!memeStatus) {
       return json({ error: "Meme not found" }, { status: 404 });
     }
 
-    if (memeStatus.is_active === 0) {
+    if (memeStatus.is_active === 0 || memeStatus.is_nsfw === 1) {
       return json(
         { error: "meme_removed", error_detail: "This meme has been removed from the system." },
         { status: 410 }
@@ -101,6 +101,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       SELECT m.id
       FROM memes m
       WHERE m.is_active = 1
+        AND m.is_nsfw = 0
         AND m.id NOT IN (
           SELECT meme_id FROM cat_decisions WHERE user_id = ?
         )

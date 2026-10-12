@@ -26,6 +26,7 @@ interface MemeRow {
   title: string | null;
   image_url: string | null;
   storage_path: string | null;
+  is_nsfw: number;
 
   corpus_status: string | null;
   duplicate_of: string | null;
@@ -113,6 +114,7 @@ const SELECT_COLUMNS = `
   m.title,
   m.image_url,
   m.storage_path,
+  m.is_nsfw,
 
   c.corpus_status,
   c.duplicate_of,
@@ -298,6 +300,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         title: targetMeme.title || "Untitled Meme",
         image_url: fullUrl,
         storage_path: targetMeme.storage_path || "",
+        is_nsfw: targetMeme.is_nsfw === 1,
 
         // Human judge's own saved decision, if one exists.
         curation: buildCuration(targetMeme),
