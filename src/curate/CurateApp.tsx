@@ -7,7 +7,7 @@ import {
   type CorpusStatus,
   type CuratorUser
 } from "./curateTypes";
-import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme } from "./curateApi";
+import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme, setMemeNsfw } from "./curateApi";
 import EditorialButtons from "./EditorialButtons";
 import CategorizationPanel from "./CategorizationPanel";
 import CurationStatsModal from "./CurationStatsModal";
@@ -324,6 +324,30 @@ export default function CurateApp() {
       stateRef.current.isSaving = false;
     }
   }, [loadMeme]);
+
+  const handleToggleNsfw = useCallback(async () => {
+    const meme = stateRef.current.currentMeme;
+    if (!meme || nsfwLoading) return;
+
+    const nextValue = !meme.is_nsfw;
+    setNsfwLoading(true);
+    try {
+      await setMemeNsfw(meme.id, nextValue);
+      setCurrentMeme((current) =>
+        current && current.id === meme.id
+          ? { ...current, is_nsfw: nextValue }
+          : current
+      );
+      setToast({ message: nextValue ? "NSFW TAG ADDED" : "NSFW TAG REMOVED", type: "success" });
+    } catch (err: unknown) {
+      setToast({
+        message: err instanceof Error ? err.message : "Failed to update NSFW tag",
+        type: "error"
+      });
+    } finally {
+      setNsfwLoading(false);
+    }
+  }, [nsfwLoading]);
 
   // Topic Toggle (Max 3)
   const handleToggleTopic = useCallback((topicId: string) => {
