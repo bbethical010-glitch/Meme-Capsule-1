@@ -1,4 +1,4 @@
-# MEME CAPSULE — MASTER KNOWLEDGE DOCUMENT & CANONICAL SYSTEM SPECIFICATION
+﻿# MEME CAPSULE — MASTER KNOWLEDGE DOCUMENT & CANONICAL SYSTEM SPECIFICATION
 ### The Definitive System Reference for Developers, AI Coding Agents, Curators, Product Teams & Marketers
 
 > **Document Type:** Canonical Master Architecture, Technical & Product Specification  
@@ -333,13 +333,35 @@ Registered on the Android WebView as `window.MemeCapsuleAndroid`:
 - **Mood Boards ("Pinned Energy"):** Color-coded thematic binders (`primary`, `secondary`, `tertiary`) created via `CreateBoardModal.tsx`.
 - **Pinboard Synchronization:** When a meme is pinned to a board, the system synchronizes both `meme_pinboard` and `meme_favorites` records to guarantee that pinned meme thumbnails always render reliably even if the meme was not previously saved to the main vault.
 
-### 3.8 Mobile Monetization (AdMob + Google Play In-App Purchases)
+### 3.8 Mobile Monetization (AdMob + Google Play In-App Purchases & Neo-Brutalist Store)
 - **Google AdMob:**
-  - Non-intrusive full-screen interstitial ad displayed every 4th meme viewed via `@capacitor-community/admob`.
-  - Rewarded ads allow users to unlock optional bonus drops.
-- **Google Play In-App Purchase (Pro Tier):**
-  - Product ID: `remove_ads_forever` managed via `@capgo/native-purchases`.
-  - Upgrading unlocks Zero Ads, Unlimited Vault capacity, and permanent Triple Drop Mode.
+  - Non-intrusive full-screen interstitial ad displayed every 4th meme viewed via `@capacitor-community/admob`. Suppressed permanently if `hasAdsRemoved()`.
+  - Rewarded ads allow users to unlock optional bonus drops or temporary +1 session Mood Board slots. Rewarded ads remain fully optional even for users who purchased No Ads.
+- **Neo-Brutalist In-App Capsule Store (`src/components/store/`):**
+  - Full-screen game-style overlay opened via `openStore({ focus?: ProductId })`.
+  - Catalog (`src/monetization/catalog.ts`): Single source of truth containing 11 single unlocks and 5 bundles:
+    - **Single Unlocks:** `remove_ads_forever` (NO ADS), `unlimited_mood_boards` (BOARD BOSS), `fx_arcade_pack` (ARCADE FX), 4 colour themes (`theme_cyberpunk_cyan`, `theme_acid_green`, `theme_midnight_gold`, `theme_blood_orange`), and 4 drop mode packs (`pack_dark_humour`, `pack_wholesome`, `pack_desi`, `pack_gaming` - marked `available: false` / COMING SOON pending backend category endpoint).
+    - **Bundles:** `bundle_starter` (Starter Pack), `bundle_style` (Drip Pack), `bundle_meme_lovers` (Meme Head Pack), `meme_capsule_pro` (Capsule Pro), `bundle_ultimate` (Capsule Max).
+    - **Rarity Tiers:** Common (`#988ca1`), Rare (`#9b30ff`), Epic (`#dd0061`), Legendary (`#f4c300`).
+  - **Billing Engine (`@capgo/native-purchases` v8.8.1):**
+    - Displays ONLY live formatted prices from Google Play (`priceString`). Never displays base reference INR prices.
+    - Live savings badge computed dynamically: `1 - (bundlePrice / sum(componentPrices))`. Hidden if any component price is missing.
+    - Automatic purchase acknowledgement for all one-time non-consumable products to prevent Google Play 3-day refunds.
+    - Silent cancellation handling (zero intrusive error toasts on cancel).
+    - Pending payment tracking (UPI/cash delays show `PAYMENT PENDING` and reconcile on app resume / foreground).
+    - `restorePurchases()` re-queries Google Play INAPP purchases directly with `PURCHASES RESTORED` or `NOTHING TO RESTORE` toasts.
+    - Gracefully displays `STORE UNAVAILABLE` without crashing on sideloaded APKs or network failures.
+  - **Entitlements System (`src/monetization/entitlements.ts`):**
+    - Single source of truth: `useEntitlements()` hook backed by `EntitlementsContext` and cached in `localStorage`.
+    - Union-based grants model: owning a bundle automatically expands to grant all component product IDs and entitlement keys.
+    - Offline resilience: persists last verified ownership snapshot; only revokes if an online Play query confirms refund/revocation.
+    - Auto-reverts equipped cosmetics (themes, FX) to classic defaults if access is revoked.
+  - **Interactive Features:**
+    - 8-second temporary theme preview with countdown banner and auto-revert.
+    - Neo-Brutalist celebratory slam animation (`PurchaseCelebration.tsx`) on purchase confirmation.
+    - Honest bundle partial ownership warnings: "YOU ALREADY OWN N OF M ITEMS".
+    - 4 selectable Arcade FX styles: Classic, Retro Slam, Neon Glitch, Cassette Pop.
+    - Drop Mode selector with niche filters next to HIT ME button.
 
 ### 3.9 Mobile Safety, Reporting & Local Blocklist
 - **Reporting Modal (`ReportModal.tsx`):** Users can report inappropriate content (`NSFW`, `Hate Speech`, `Harassment`, `Copyright`).
@@ -712,13 +734,14 @@ Social Media:
   Threads: https://www.threads.com/@capsule.meme
 
 ECOSYSTEM STRUCTURE:
-1. PUBLIC MOBILE APP (com.meme.capsule - v3.4 / versionCode 25):
+1. PUBLIC MOBILE APP (com.meme.capsule - v3.6 / versionCode 27):
    - Tech: React 19, TypeScript, Vite 6, Tailwind CSS v4, Capacitor 8 Android container.
    - Core UX: 4-card 3D perspective spring deck (@react-spring/web, @use-gesture/react), 12-meme rolling FIFO prefetch buffer (STACK_BATCH_SIZE = 10, PIPELINE_TARGET_SIZE = 12) with 60%-70% stack consumption prefetch trigger (STACK_PREFETCH_CONSUMPTION_RATIO = 0.6 / FIFO_REFILL_TRIGGER_SIZE = 4) and streaming per-meme enqueueing (enqueueMemeToFifo + advanceInlineWithoutLoadingScreen so viewing flow never breaks with a full-screen loading screen), zero floating action buttons over the Meme Box, and horizontal 4-column CTA row (nav#ctaRow, max-w-[356px] w-full mt-3.5) directly below the Meme Box: LIKE (#FF2A85) -> VAULT (#A855F7) -> PIN (#FACC15) -> MORE (⋮) (#00E5FF) with translate(3px, 3px) active press, ink-spread ripple (@keyframes inkSpread), 6-tick radial shockwave bursts (@keyframes burstSparks), and pop icon animations (@keyframes neoBurst). Tapping MORE opens #moreMenu (w-48 bg-white border-4 border-black) containing SHARE (#A855F7), DOWNLOAD (#FACC15), and REPORT (#FF2A85).
+   - Google Play Rating Feature (RatingModal.tsx - v3.6): Interval-based rating prompt (first triggers at >= 8 memes viewed, then every 15 memes). Features a Neo-Brutalist 5-star interactive rating deck with dynamic reaction labels ("GOD-TIER DANKNESS!", "CERTIFIED BANGERS!", etc.). Redirects to Google Play Store via native bridge `openPlayStoreListing()` (`market://details?id=com.meme.capsule` with fallback to `https://play.google.com/store/apps/details?id=com.meme.capsule`) and sets `meme_capsule_rating_completed = 'true'` so it permanently never pops up again once feedback is registered. Provides a 24-hour deferral option (`REMIND ME IN 24 HOURS`) setting `meme_capsule_rating_deferred_until`. Also includes a manual trigger button in App Settings under "MEMBERSHIP & APP GUIDE".
    - Smart Session Lifecycle (Background App-Switch Retention vs Cold-Start Homepage Reset - v3.2): Uses `sessionStorage` (`meme_capsule_active_session_v1`), a short-lived 2-minute external share handoff token (`meme_capsule_share_handoff_v1`), and native Android process/task state detection (`window.MemeCapsuleAndroid.shouldRestoreRunningSession()` + `meme-capsule-reset-to-home` in `MainActivity.java`). Switching between running apps or sharing to external apps preserves the exact loaded meme and 12-meme FIFO queue, whereas removing/closing the app from running background applications in Android Recents and reopening it starts fresh on the Homepage (`screen = 'waiting'`, `activeTab = 'home'`).
    - Top-Left Header & Settings Dismissal: Removed the leaf/seed badge (🌱 1) from the top-left header and replaced it with a redesigned Neo-Brutalist Settings icon button (#1c1c1e / #A855F7, 2px solid #000, 2.5px 2.5px 0px #000). Replaced the redundant large gear square on the top right of APP SETTINGS with a Neo-Brutalist [X] Close Button, and enabled top-left header re-tap toggle, backdrop tap-to-dismiss, and Android hardware back dismissal.
    - Viral Sharing: Persistent Share Sheet Ribbon sits 100% flush (0px breathing space) on the top border of the 3-tab bottom navigation dock (bottom: calc(60px + max(env(safe-area-inset-bottom, 0px), 16px))). Expands smoothly over 320ms cubic-bezier(0.16, 1, 0.3, 1) from behind the dock, supports Instagram-style 0-latency 1:1 finger drag-to-dismiss (26% height / 0.5px/ms velocity threshold), and removes both the 5 technical/debug labels and the visible dark promotional text preview box from the frontend while preserving 100% of the promotional message + Play Store link payload on clipboard and share intents.
-   - Native Java: MainActivity.java injects "window.MemeCapsuleAndroid" for Scoped MediaStore gallery saving (Pictures/Meme Capsule) and targeted intent sharing (shareImageToApp).
+   - Native Java: MainActivity.java injects "window.MemeCapsuleAndroid" for Scoped MediaStore gallery saving (Pictures/Meme Capsule), Play Store listing intent (openPlayStoreListing), and targeted intent sharing (shareImageToApp).
    - Collections, Settings & Monetization: Meme Vault (free limit 20, Pro unlimited), Mood Boards, dedicated Settings & History page (Privacy Policy v1.1, 4 granular history/data erasure controls, feed/buffer/shake toggles), AdMob interstitials (every 4th drop), In-App Purchase (₹99 remove_ads_forever).
 
 2. PUBLIC WEB PLATFORM (memecapsule.wtf):
