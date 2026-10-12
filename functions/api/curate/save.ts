@@ -12,6 +12,8 @@ import { ensureCurationTables } from "../../_shared/curateDb";
 
 interface SavePayload {
   meme_id?: string;
+  moderation_only?: boolean;
+  is_nsfw?: boolean;
   corpus_status?: "keep" | "excluded" | "duplicate" | "review_later";
   duplicate_of?: string;
   topics?: string[];
@@ -32,6 +34,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     if (!memeId) {
       return json({ error: "meme_id is required." }, { status: 400 });
+    }
+
+    if (body.moderation_only) {
+      if (typeof body.is_nsfw !== "boolean") {
+        return json({ error: "is_nsfw must be a boolean." }, { status: 400 });
+      }
+      const meme = await env.DB.prepare("SELECT id FROM memes WHERE id = ?")
+        .bind(memeId)
+        .first<{ id: string }>();
+      if (!meme) {
+        return json({ error: "Meme not found." }, { status: 404 });
+      }
+      await env.DB.prepare("UPDATE memes SET is_nsfw = ? WHERE id = ?")
+        .bind(body.is_nsfw ? 1 : 0, memeId)
+        .run();
+      return json({ success: true, meme_id: memeId, is_nsfw: body.is_nsfw });
     }
 
     if (!corpusStatus || !["keep", "excluded", "duplicate", "review_later"].includes(corpusStatus)) {
