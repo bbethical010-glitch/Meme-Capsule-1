@@ -339,21 +339,30 @@ Registered on the Android WebView as `window.MemeCapsuleAndroid`:
   - Rewarded ads allow users to unlock optional bonus drops or temporary +1 session Mood Board slots. Rewarded ads remain fully optional even for users who purchased No Ads.
 - **Neo-Brutalist In-App Capsule Store (`src/components/store/`):**
   - Full-screen game-style overlay opened via `openStore({ focus?: ProductId })`.
+  - **Clash of Clans Horizontal Game Store Architecture:**
+    - Top sticky category jump bar: `[★ FEATURED]`, `[BUNDLES]`, `[PASSES]`, `[THEMES]`, `[PACKS]`, `[ACCOUNT]` with live active indicator tracking scroll position. Tapping any pill smoothly scrolls horizontally to that category.
+    - Lateral swipe physics with `snap-x snap-mandatory` and `snap-start`: cards are arranged horizontally with fixed game-proportions (`w-[275px]` to `w-[305px]`), allowing adjacent cards to peek from the right edge on mobile viewports (~360px-412px) to entice lateral browsing.
+    - Category shelves: Featured Hero (Capsule Max), Value Bundles (4), Permanent Passes (3), Colour Themes (4 with 8s preview), Drop Mode Packs (4), Play Store Account & QA (1).
+  - **QA Testing Mode & Free Feature Verification:**
+    - Reference pricing fallback (`FALLBACK_PRODUCTS` in `billing.ts`): ensures prices are always formatted and displayed (`₹149`, `₹79`, etc.) on sideloaded APKs or test environments without requiring live Play Console activation.
+    - Simulated test unlock (`testPurchase(productId)`): allows immediate testing of all paid unlocks and bundle celebrations without Google Play Billing errors.
+    - Free tier reset (`resetTestPurchases()`): one-tap button wipes all entitlements so testers can verify 100% of the free experience (Mood Boards 3-cap, default theme, classic FX, ads).
+    - Rewarded ad fallback in `App.tsx`: ensures testing the free Mood Board +1 session slot works reliably even if native AdMob test video fill is unavailable.
   - Catalog (`src/monetization/catalog.ts`): Single source of truth containing 11 single unlocks and 5 bundles:
     - **Single Unlocks:** `remove_ads_forever` (NO ADS), `unlimited_mood_boards` (BOARD BOSS), `fx_arcade_pack` (ARCADE FX), 4 colour themes (`theme_cyberpunk_cyan`, `theme_acid_green`, `theme_midnight_gold`, `theme_blood_orange`), and 4 drop mode packs (`pack_dark_humour`, `pack_wholesome`, `pack_desi`, `pack_gaming` - marked `available: false` / COMING SOON pending backend category endpoint).
     - **Bundles:** `bundle_starter` (Starter Pack), `bundle_style` (Drip Pack), `bundle_meme_lovers` (Meme Head Pack), `meme_capsule_pro` (Capsule Pro), `bundle_ultimate` (Capsule Max).
     - **Rarity Tiers:** Common (`#988ca1`), Rare (`#9b30ff`), Epic (`#dd0061`), Legendary (`#f4c300`).
   - **Billing Engine (`@capgo/native-purchases` v8.8.1):**
-    - Displays ONLY live formatted prices from Google Play (`priceString`). Never displays base reference INR prices.
+    - Displays live formatted prices from Google Play (`priceString`) with catalog reference fallback (`FALLBACK_PRODUCTS`) on test builds.
     - Live savings badge computed dynamically: `1 - (bundlePrice / sum(componentPrices))`. Hidden if any component price is missing.
     - Automatic purchase acknowledgement for all one-time non-consumable products to prevent Google Play 3-day refunds.
     - Silent cancellation handling (zero intrusive error toasts on cancel).
     - Pending payment tracking (UPI/cash delays show `PAYMENT PENDING` and reconcile on app resume / foreground).
     - `restorePurchases()` re-queries Google Play INAPP purchases directly with `PURCHASES RESTORED` or `NOTHING TO RESTORE` toasts.
-    - Gracefully displays `STORE UNAVAILABLE` without crashing on sideloaded APKs or network failures.
   - **Entitlements System (`src/monetization/entitlements.ts`):**
     - Single source of truth: `useEntitlements()` hook backed by `EntitlementsContext` and cached in `localStorage`.
     - Union-based grants model: owning a bundle automatically expands to grant all component product IDs and entitlement keys.
+    - Direct grant/revoke/reset helpers: `grantProductDirectly`, `revokeProductDirectly`, `resetAllEntitlements` for seamless QA toggling.
     - Offline resilience: persists last verified ownership snapshot; only revokes if an online Play query confirms refund/revocation.
     - Auto-reverts equipped cosmetics (themes, FX) to classic defaults if access is revoked.
   - **Interactive Features:**
@@ -363,7 +372,15 @@ Registered on the Android WebView as `window.MemeCapsuleAndroid`:
     - 4 selectable Arcade FX styles: Classic, Retro Slam, Neon Glitch, Cassette Pop.
     - Drop Mode selector with niche filters next to HIT ME button.
 
-### 3.9 Mobile Safety, Reporting & Local Blocklist
+### 3.9 Mobile Safety, Age Verification (DOB) & Content Reporting
+- **First-Launch Date of Birth (DOB) Verification Modal (`DateOfBirthModal.tsx`):**
+  - Integrated into the app flow and presented immediately **after the Onboarding Guide** on first download/install before entering the main card deck.
+  - Mandatory full-screen modal (`z-[2000]`) non-bypassable: cannot be closed, skipped, or dismissed via backdrop click, Escape key, or Android hardware back navigation.
+  - Auto-advancing Neo-Brutalist DD / MM / YYYY numerical inputs with numeric keypad, coupled with an optional native Android DatePicker calendar dialog.
+  - Strict 18+ age validation: users under 18 years of age are blocked from entering.
+  - Single-entry locked: once submitted, the DOB is saved to `localStorage('meme_capsule_user_dob')` alongside `meme_capsule_dob_confirmed_at` and can never be re-input or edited.
+  - Displayed as a verified, locked badge in App Settings under "PRIVACY, LEGAL & ABOUT".
+  - Canonical initial onboarding sequence: `Privacy Policy Consent -> Onboarding Guide -> Date of Birth Modal (18+) -> Main Home Deck`.
 - **Reporting Modal (`ReportModal.tsx`):** Users can report inappropriate content (`NSFW`, `Hate Speech`, `Harassment`, `Copyright`).
 - **Immediate Local Suppression:** Submitting a report triggers `POST /api/report` to Cloudflare Pages and immediately adds the meme ID to `localStorage('reported_memes')`. The client filtering loop (`fetchValidMeme()`) permanently drops reported memes from subsequent card drops.
 

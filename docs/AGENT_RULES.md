@@ -149,17 +149,17 @@ It is NOT part of this repository — it syncs via a separate GitHub repository 
 
 **BEFORE starting any task:**
 1. Always fetch the latest version first:
-   - Windows: `powershell -File fetch-knowledge.ps1`
-   - Mac/Linux: `./fetch-knowledge.sh`
+   - Windows: `powershell -ExecutionPolicy Bypass -File .knowledge/fetch-knowledge.ps1`
+   - Mac/Linux: `bash .knowledge/fetch-knowledge.sh`
 2. Read `docs/MEME_CAPSULE_KNOWLEDGE.md` fully before writing any code or changing configuration.
 
 **AFTER any meaningful change:**
 (new feature, architecture decision, bug fix, workflow change, new dependency, table migration):
 1. Update `docs/MEME_CAPSULE_KNOWLEDGE.md` with the new relevant notes.
 2. Push the updated knowledge file back to the shared repository:
-   - Windows: `powershell -File update-knowledge.ps1`
-   - Mac/Linux: `./update-knowledge.sh`
-3. If a **CONFLICT** is reported — stop, run `fetch-knowledge.ps1` fresh, manually merge your new notes into the fresh file, then run `update-knowledge.ps1` again. Never force-push or skip the fetch before pushing.
+   - Windows: `powershell -ExecutionPolicy Bypass -File .knowledge/update-knowledge.ps1`
+   - Mac/Linux: `bash .knowledge/update-knowledge.sh`
+3. If a **CONFLICT** is reported — stop, run `.knowledge/fetch-knowledge.ps1` (or `bash .knowledge/fetch-knowledge.sh`) fresh, manually merge your new notes into the fresh file, then run the update script again. Never force-push or skip the fetch before pushing.
 
 ---
 

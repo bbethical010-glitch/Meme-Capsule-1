@@ -1203,6 +1203,15 @@ meme application/
 │           │   ├── step-4-deliver.md
 │           │   └── tones.md
 │           └── SKILL.md
+├── .knowledge
+│   ├── .knowledge_meta.json
+│   ├── fetch-knowledge.ps1
+│   ├── fetch-knowledge.sh
+│   ├── update-knowledge.ps1
+│   └── update-knowledge.sh
+├── .nexus
+├── .vscode
+│   └── launch.json
 ├── .windsurf
 │   └── skills
 │       └── brag
@@ -1526,7 +1535,6 @@ meme application/
 │   │   │   ├── frame-03-at-15.038s.png
 │   │   │   └── frame-04-at-19.449s.png
 │   │   └── index.html                                # HTML entry point
-│   ├── .DS_Store
 │   ├── brag-plan.md
 │   ├── brag.mp4
 │   └── composition-brief.md
@@ -1546,7 +1554,6 @@ meme application/
 │   │   ├── 011_force_removals.sql
 │   │   ├── 011_reconcile_active_and_curation_sync.sql
 │   │   └── 012_add_curation_status_to_memes.sql
-│   ├── .DS_Store
 │   ├── schema.sql                                    # SQLite schema for meme metadata
 │   └── seed.sql
 ├── docs                                              # Dedicated project documentation folder
@@ -1643,9 +1650,9 @@ meme application/
 │   │   │   ├── account.ts
 │   │   │   ├── ai-presets.ts
 │   │   │   ├── ai-proxy.ts
-│   │   │   ├── approve.ts                            # POST /api/curate/approve (atomic adoption & finalization)
+│   │   │   ├── approve.ts
 │   │   │   ├── export.ts
-│   │   │   ├── force-remove.ts                       # POST /api/curate/force-remove (permanent R2 & D1 deletion)
+│   │   │   ├── force-remove.ts
 │   │   │   ├── list.ts
 │   │   │   ├── next.ts
 │   │   │   ├── save.ts
@@ -1748,11 +1755,11 @@ meme application/
 │   └── vite-env.d.ts                                 # Vite environment type augmentation
 ├── workers
 │   └── analyticsAggregator.ts
+├── .dev.vars
 ├── .dev.vars.example                                 # Environment variable template
-├── .DS_Store
+├── .env
 ├── .gitignore                                        # Git ignore rules
 ├── converted.pdf
-├── fetch-knowledge.ps1
 ├── FORCE_REMOVE_IMPLEMENTATION.md
 ├── FORCE_REMOVE_TODO.md
 ├── index.html                                        # HTML entry point
@@ -1762,7 +1769,6 @@ meme application/
 ├── stitch_admin.html
 ├── tsconfig.functions.json
 ├── tsconfig.json                                     # TypeScript configuration
-├── update-knowledge.ps1
 ├── vite.config.ts                                    # Vite build configuration
 └── wrangler.toml                                     # Cloudflare Workers/Pages config (NEW — Phase 2)
 ```

@@ -93,9 +93,10 @@ The database `meme-capsule-db` (SQLite at the edge) operates under 13 sequential
 ## 3. Active Cross-Codebase Synchronization
 
 The single source of truth across all 3 codebases lives in `docs/MEME_CAPSULE_KNOWLEDGE.md`, synchronized through `editorav010-dev/meme-capsule-sync`.
-- **Fetch Script**: `powershell -File fetch-knowledge.ps1` (or `./fetch-knowledge.sh` on macOS/Linux).
-- **Update Script**: `powershell -File update-knowledge.ps1` (or `./update-knowledge.sh` on macOS/Linux).
+- **Fetch Script**: `powershell -ExecutionPolicy Bypass -File .knowledge/fetch-knowledge.ps1` (or `bash .knowledge/fetch-knowledge.sh` on macOS/Linux).
+- **Update Script**: `powershell -ExecutionPolicy Bypass -File .knowledge/update-knowledge.ps1` (or `bash .knowledge/update-knowledge.sh` on macOS/Linux).
 - Local sync metadata is tracked in `.knowledge/.knowledge_meta.json`.
+- All sync scripts and metadata are cleanly organized in `.knowledge/`.
 
 ---
 
