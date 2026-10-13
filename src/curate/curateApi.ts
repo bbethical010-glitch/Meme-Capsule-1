@@ -92,6 +92,18 @@ export async function forceRemoveMeme(memeId: string): Promise<{ success: boolea
   return handleResponse(res);
 }
 
+export async function updateMemeNsfw(
+  memeId: string,
+  isNsfw: boolean
+): Promise<{ success: boolean; meme_id: string; is_nsfw: number; nsfw_flagged_by: string | null }> {
+  const res = await fetch("/api/curate/nsfw", {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ meme_id: memeId, is_nsfw: isNsfw })
+  });
+  return handleResponse(res);
+}
+
 export async function fetchCurationStats(): Promise<CurationStatsResponse> {
   const res = await fetch("/api/curate/stats", {
     headers: getAuthHeaders(),

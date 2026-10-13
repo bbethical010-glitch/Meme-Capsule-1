@@ -2,7 +2,7 @@
 
 ## Current Storage
 
-The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 14 production D1 migrations applied from `000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`).
+The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 15 production D1 migrations applied from `000_complete_setup.sql` through `013_add_nsfw_flag.sql`).
 
 Current storage layers:
 
@@ -74,8 +74,11 @@ Core fields:
 - `share_text`: text used by share actions.
 - `random_key`: indexed random selection helper (REAL type).
 - `curation_status`: `keep`, `excluded`, `duplicate`, `review_later`, or `NULL`. Added in Migration 012 to partition non-active memes into authoritatively rejected (`excluded`) vs uncurated backlog (`NULL`).
+- `is_nsfw`: 18+ content flag (`INTEGER NOT NULL DEFAULT 0`). Added in Migration 013 (`013_add_nsfw_flag.sql`). Gated on public delivery routes (`is_nsfw = 0` by default; requested via `?nsfw=1`).
+- `nsfw_flagged_by`: Flag source (`'ai-judge'`, `'curator'`, `'report'`, or `NULL`). Added in Migration 013.
+- Index: `idx_memes_is_nsfw` on `memes(is_nsfw)`.
 
-Only records with `status = 'active'` and `is_active = 1` should be returned to users.
+Only records with `status = 'active'`, `is_active = 1`, and `is_nsfw = 0` (unless `?nsfw=1` requested) should be returned to users.
 
 ### Reporting System Table: `meme_reports`
 - `id`: Auto-incrementing integer primary key.
@@ -171,12 +174,13 @@ reports linked to a `meme_id`:
 - **Remove Meme** archives the row in `memes` and sets `is_active = 0`.
 - **Blacklist + Remove** inserts the meme into the existing `content_blacklist`
   table, then archives it and resolves the report.
+- **Mark NSFW** sets `is_nsfw = 1` and `nsfw_flagged_by = 'report'` on the meme without removing it from circulation (non-destructive moderation action for `NSFW` reports), resolving the report.
 
 Destructive actions use the meme ID stored on the report rather than trusting a
 browser-supplied target. The dashboard requires `ADMIN_API_TOKEN` and asks for
 confirmation before removing or blacklisting content.
 
-Public routes (`/api/random-meme`, `/api/daily-meme`, `/api/memes/random`) never use the admin token. They only return rows with `status = 'active'`, `is_active = 1`, and an authoritative finalization in `meme_curation_final` with `corpus_status = 'keep'`. All unfinalized or excluded memes are maintained in `status = 'archived'` (`is_active = 0`) and are excluded at the SQL query level.
+Public routes (`/api/random-meme`, `/api/daily-meme`, `/api/memes/random`) never use the admin token. They only return rows with `status = 'active'`, `is_active = 1`, and an authoritative finalization in `meme_curation_final` with `corpus_status = 'keep'`. By default, NSFW content (`is_nsfw = 1`) is strictly excluded (`AND (m.is_nsfw IS NULL OR m.is_nsfw = 0)`). Clients can request NSFW-inclusive results by supplying `?nsfw=1`. All unfinalized or excluded memes are maintained in `status = 'archived'` (`is_active = 0`) and are excluded at the SQL query level.
 
 ## Authoritative Resolution & Active Pool Synchronization
 
@@ -201,6 +205,7 @@ The platform enforces a canonical single-source-of-truth contract across `memes`
    - **Migration 011 (`011_force_removals.sql`)**: Created `meme_force_removals` audit table and indexes (`idx_force_removals_removed_at`, `idx_force_removals_removed_by`, `idx_force_removals_meme_id`) to track permanent purging of non-meme content from R2 and D1.
    - **Migration 011 (`011_reconcile_active_and_curation_sync.sql`)**: Eliminated drift by enforcing $\text{status} = \text{'active'} \iff \text{is\_active} = 1$.
    - **Migration 012 (`012_add_curation_status_to_memes.sql`)**: Added `curation_status` column to `memes`, backfilling `'keep'` (111) and `'excluded'` (53) from `meme_curation_final` while leaving uncurated backlog items as `NULL`. Automatically maintained on all future superadmin single and bulk resolutions.
+   - **Migration 013 (`013_add_nsfw_flag.sql`)**: Added `is_nsfw` (`INTEGER NOT NULL DEFAULT 0`) and `nsfw_flagged_by` (`TEXT`) columns to `memes` along with `idx_memes_is_nsfw` index for persistent 18+ content moderation and client-controlled delivery gating.
 
 ## Google Drive Workflow
 

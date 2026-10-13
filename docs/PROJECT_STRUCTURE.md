@@ -1553,7 +1553,8 @@ meme application/
 │   │   ├── 010_enforce_superadmin_active_and_cleanup_judges.sql
 │   │   ├── 011_force_removals.sql
 │   │   ├── 011_reconcile_active_and_curation_sync.sql
-│   │   └── 012_add_curation_status_to_memes.sql
+│   │   ├── 012_add_curation_status_to_memes.sql
+│   │   └── 013_add_nsfw_flag.sql                     # D1 migration 013: is_nsfw & nsfw_flagged_by columns
 │   ├── schema.sql                                    # SQLite schema for meme metadata
 │   └── seed.sql
 ├── docs                                              # Dedicated project documentation folder
@@ -1655,8 +1656,11 @@ meme application/
 │   │   │   ├── force-remove.ts
 │   │   │   ├── list.ts
 │   │   │   ├── next.ts
+│   │   │   ├── nsfw.ts                               # PATCH /api/curate/nsfw — Curator NSFW flag toggle
 │   │   │   ├── save.ts
 │   │   │   └── stats.ts
+│   │   ├── memes
+│   │   │   └── random.ts
 │   │   ├── contact.ts
 │   │   ├── daily-meme.ts                             # GET /api/daily-meme — public
 │   │   ├── events.ts
@@ -1799,6 +1803,8 @@ meme application/
 | `admin/upload.ts` | `POST /api/admin/upload` | Uploads image/video to R2 storage | R2 bucket |
 | `admin/sync-r2.ts` | `POST /api/admin/sync-r2` | Scans R2 and creates D1 records for untracked files | R2 bucket → D1 database |
 | `_shared/d1r2.ts` | (shared module) | D1 queries, R2 helpers, auth, fallback logic | D1, R2, fallback memes |
+| `memes/random.ts` | `GET /api/memes/random` | Returns one random active meme (accepts `?nsfw=1` or `true`) | D1 database → fallback memes |
+| `curate/nsfw.ts` | `PATCH/POST /api/curate/nsfw` | Curator NSFW flag toggle (`is_nsfw = 1/0`, `nsfw_flagged_by = 'curator'`) | D1 database |
 
 ### Data Flow
 

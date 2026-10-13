@@ -1,4 +1,4 @@
-﻿# MEME CAPSULE — MASTER KNOWLEDGE DOCUMENT & CANONICAL SYSTEM SPECIFICATION
+# MEME CAPSULE — MASTER KNOWLEDGE DOCUMENT & CANONICAL SYSTEM SPECIFICATION
 ### The Definitive System Reference for Developers, AI Coding Agents, Curators, Product Teams & Marketers
 
 > **Document Type:** Canonical Master Architecture, Technical & Product Specification  
@@ -381,7 +381,7 @@ Registered on the Android WebView as `window.MemeCapsuleAndroid`:
   - Integrated into the app flow and presented immediately **after the Onboarding Guide** on first download/install before entering the main card deck.
   - Mandatory full-screen modal (`z-[2000]`) non-bypassable: cannot be closed, skipped, or dismissed via backdrop click, Escape key, or Android hardware back navigation.
   - Auto-advancing Neo-Brutalist DD / MM / YYYY numerical inputs with numeric keypad, coupled with an optional native Android DatePicker calendar dialog.
-  - Strict 18+ age validation: users under 18 years of age are blocked from entering.
+  - Zero-Knowledge Client-Side Evaluation: DOB is evaluated entirely on-device and never sent to the backend. In accordance with zero-tracking privacy principles, users 18+ have the option to unlock an NSFW content filter in App Settings. When enabled by an adult user, the mobile app passes `?nsfw=1` to public backend delivery endpoints (`/api/random-meme`, `/api/daily-meme`). For users under 18 or when toggled off, requests omit the parameter and the backend defaults strictly to safe/filtered memes (`is_nsfw = 0`).
   - Single-entry locked: once submitted, the DOB is saved to `localStorage('meme_capsule_user_dob')` alongside `meme_capsule_dob_confirmed_at` and can never be re-input or edited.
   - Displayed as a verified, locked badge in App Settings under "PRIVACY, LEGAL & ABOUT".
   - Canonical initial onboarding sequence: `Privacy Policy Consent -> Onboarding Guide -> Date of Birth Modal (18+) -> Main Home Deck`.
@@ -513,17 +513,18 @@ Located in `functions/api/contact.ts` and `src/components/ContactForm.tsx`:
 
 ### 5.1 Serverless Edge Infrastructure (Cloudflare Pages Functions)
 The backend is completely serverless, deployed on Cloudflare Pages (`https://meme-capsule-eww.pages.dev`):
-- **`GET /api/random-meme`**: Fetches a random approved meme record from D1 with strict CORS headers (`Access-Control-Allow-Origin: *`).
-- **`GET /api/daily-meme`**: Deterministically selects the curated daily meme based on the current UTC date.
+- **`GET /api/random-meme` & `GET /api/memes/random`**: Fetches a random approved meme record from D1 with strict CORS headers (`Access-Control-Allow-Origin: *`). Honors optional `?nsfw=1` query parameter; defaults strictly to safe/filtered (`AND (m.is_nsfw IS NULL OR m.is_nsfw = 0)`).
+- **`GET /api/daily-meme`**: Deterministically selects the curated daily meme based on the current UTC date. Honors optional `?nsfw=1` query parameter; defaults strictly to safe/filtered.
+- **`PATCH /api/curate/nsfw`**: Dedicated curator endpoint for toggling `is_nsfw` and recording `nsfw_flagged_by = 'curator'`.
 - **`POST /api/like`**: Atomically increments `likes_count` for a given meme ID in D1.
 - **`POST /api/events`**: Ingests batched telemetry events into the D1 event queue.
 - **`POST /api/report`**: Receives user safety reports and logs them in `meme_reports`.
-- **`/reports`**: Serves the standalone HTML/CSS moderation dashboard for reviewing flagged content.
+- **`/reports`**: Serves the standalone HTML/CSS moderation dashboard for reviewing flagged content with non-destructive *Mark NSFW* support.
 - **`/api/cat/*` & `/api/curate/*`**: Authenticated endpoints serving the multi-judge curation system.
 - **`/api/admin/*`**: Token-protected administrative endpoints for storage syncing, SQL execution, and analytics management.
 
-### 5.2 Cloudflare D1 Database Schemas & 3-Tier Partitioning Architecture (Migration 012)
-Meme Capsule uses Cloudflare D1 (serverless SQLite). The database schema has evolved through 13 migration files (`d1/migrations/`).
+### 5.2 Cloudflare D1 Database Schemas, 3-Tier Partitioning & NSFW Flag Integration (Migrations 012 & 013)
+Meme Capsule uses Cloudflare D1 (serverless SQLite). The database schema has evolved through 14 migration files (`d1/migrations/`).
 
 #### The 3-Tier Partitioning Architecture (`curation_status`):
 To prevent mixing rejected memes with uncurated backlog items, Migration 012 introduced the `curation_status` column on the `memes` table:
@@ -554,6 +555,8 @@ To prevent mixing rejected memes with uncurated backlog items, Migration 012 int
    - `status` (TEXT): Lifecycle state (`active`, `archived`, `draft`).
    - `is_active` (INTEGER): Public delivery flag (1 = active, 0 = inactive).
    - `curation_status` (TEXT DEFAULT NULL): Explicit editorial status (`keep`, `excluded`, `duplicate`, `review_later`, or `NULL` for uncurated backlog). Added in Migration 012.
+   - `is_nsfw` (INTEGER NOT NULL DEFAULT 0): 18+ content flag added in Migration 013 (`013_add_nsfw_flag.sql`). Gated on public delivery routes (`is_nsfw = 0` by default; requested via `?nsfw=1`). Indexed via `idx_memes_is_nsfw`.
+   - `nsfw_flagged_by` (TEXT): Origin of NSFW flag (`'ai-judge'`, `'curator'`, `'report'`, or `NULL`). Added in Migration 013.
    - `random_key` (REAL): Indexed random selection helper (`abs(random()) / 9223372036854775807.0`).
    - `likes_count`, `shown_count`, `share_count` (INTEGER).
 2. **`meme_curation` (Judge Consensus Votes):**
@@ -593,6 +596,7 @@ Designed for rapid, high-volume evaluation. Curators (Judges 1, 2, 3) review mem
   - `Space / Enter`: Save & Advance.
   - `Esc`: Return from manual override to AI review view.
   - `Cmd/Ctrl + Z` or `U`: Instant undo last curation decision.
+- **Curator-Facing NSFW Toggle (`🔞 NSFW 18+`):** Located on the review stage bar next to `⚡ FORCE REMOVE`. Allows curators to independently flag or unflag content as NSFW (`PATCH /api/curate/nsfw`) without altering `corpus_status`, `meme_curation` audit votes, or Layer 0 keyboard shortcuts.
 
 
 ### 5.5 SuperAdmin Arbitration & Authoritative Active Synchronization
@@ -604,14 +608,15 @@ When judges diverge in their votes, the meme surfaces in the **SuperAdmin Comman
 
 ### 5.6 Admin Console, 5-Metric Status Bar & SQL Runner (`/admin`)
 Token-protected control center (`ADMIN_API_TOKEN`):
-- **Top Stats Bar:** Displays 5 distinct metrics:
+- **Top Stats Bar:** Displays 5 core metrics plus 6th NSFW stat card:
   - `TOTAL`: **5111**
   - `ACTIVE`: **111**
   - `EXCLUDED`: **53** (High-contrast red card `#FF3B30`)
   - `ARCHIVED`: **4947** (Uncurated backlog)
   - `DRAFTS`: **0**
-- **Filter Tabs:** Includes `EXCLUDED (53)` filter tab alongside `ALL (5111)`, `ACTIVE (111)`, `ARCHIVED (4947)`, and `DRAFT (0)`.
-- **Row Presentation:** Excluded memes display a high-visibility red `EXCLUDED` badge and strikethrough title.
+  - `NSFW`: **N** (High-contrast cyber pink card `#dd0061`)
+- **Filter Tabs:** Includes `NSFW` filter tab alongside `ALL (5111)`, `ACTIVE (111)`, `EXCLUDED (53)`, `ARCHIVED (4947)`, and `DRAFT (0)`.
+- **Row Presentation:** Excluded memes display a high-visibility red `EXCLUDED` badge and strikethrough title. Memes with `is_nsfw = 1` display a prominent cyber-pink `NSFW` badge.
 - **R2 Storage Sync:** Scans R2 bucket, identifies unindexed media files, and inserts them into D1 as new meme candidates.
 - **SQL Runner:** Allows administrators to execute raw SQLite queries directly against D1 with safety guards.
 - **Analytics Management:** Triggers the recalculation engine and provides CSV/Excel export capabilities.
@@ -624,10 +629,11 @@ Standalone, token-protected dashboard rendering directly from `functions/reports
   - *Dismiss:* Clears report as benign.
   - *Archive Meme:* Sets meme `status = 'archived'` in D1 (soft removal).
   - *Blacklist Meme:* Sets `status = 'archived'` AND permanently records the meme in `content_blacklist`.
+  - *Mark NSFW:* When a report has `reason = 'NSFW'`, a non-destructive moderation action sets `is_nsfw = 1` and `nsfw_flagged_by = 'report'` on the meme without removing it from circulation, resolving the report.
 
 ### 5.8 Multimodal AI Pre-Curator Loop (`/ai-judge` & NVIDIA NIM Llama 3.2 Vision)
-1. **Gemini Vision Pipeline (`/api/ai-judge/classify.ts`):** Multimodal Google Gemini Vision (`gemini-1.5-flash`) analyzes uploaded memes, extracting captions, evaluating humor mechanisms, and proposing tags.
-2. **NVIDIA NIM Python Runner (`categorise.py`):** An asynchronous worker passing images to **NVIDIA NIM (Llama 3.2 11B Vision Instruct)** to extract OCR text, score humor mechanisms (irony, absurdity, relatability), assign tone and topic, rate rarity, and perform automated toxicity/NSFW screening before staging in D1.
+1. **Gemini Vision Pipeline (`/api/ai-judge/classify.ts`):** Multimodal Google Gemini Vision (`gemini-1.5-flash`) analyzes uploaded memes, extracting captions, evaluating humor mechanisms, and performing automated NSFW/toxicity screening. When NSFW screening returns a positive signal, it writes `is_nsfw = 1, nsfw_flagged_by = 'ai-judge'` directly to `memes`.
+2. **NVIDIA NIM Python Runner (`categorise.py`):** An asynchronous worker passing images to **NVIDIA NIM (Llama 3.2 11B Vision Instruct)** to extract OCR text, score humor mechanisms (irony, absurdity, relatability), assign tone and topic, rate rarity, and perform automated toxicity/NSFW screening. When calling `/api/admin/ai-categorise`, positive screening results write `is_nsfw = 1, nsfw_flagged_by = 'ai-judge'` directly to `memes` at staging time instead of being discarded.
 
 ### 5.9 Telemetry Pipeline & Edge Ranking Recalculation Engine
 - **Client Side:** Client actions (`view`, `skip`, `like`, `share`, `download`) are enqueued into a local circular buffer and flushed every 30 seconds to `POST /api/events`.

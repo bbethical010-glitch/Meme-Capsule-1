@@ -100,3 +100,24 @@ For non-meme uploads (e.g., random photos, corrupt images, spam):
   - `POST /api/curate/force-remove` (R2 delete + multi-table D1 cleanup)
   - `GET /api/curate/next` (Filters finalized memes out of unreviewed queues)
 - **UI/UX:** Neo-brutalist styling maintained with Anton & Oswald typography, zero layout shifts, and responsive split columns.
+
+---
+
+## 6. NSFW Flag Integration (Safe by Default & Public Delivery)
+
+### 6.1 Database Migration & Schema
+- Added `d1/migrations/013_add_nsfw_flag.sql` adding `is_nsfw INTEGER DEFAULT 0` and `nsfw_flagged_by TEXT`, plus index `idx_memes_is_nsfw`.
+- Synchronized baseline schema in `d1/schema.sql` and updated `src/types.ts`.
+
+### 6.2 Public Delivery Contract
+- Core queries in `functions/_shared/d1r2.ts` default to filtering:
+  `AND (m.is_nsfw IS NULL OR m.is_nsfw = 0)`.
+- Passing `?nsfw=1` or `?nsfw=true` to `GET /api/random-meme`, `GET /api/daily-meme`, or `GET /api/memes/random` relaxes this filter to include NSFW memes.
+- Privacy preservation: Client-side mobile app DOB/age calculation remains on-device; backend receives only the boolean toggle flag.
+
+### 6.3 AI & Curator Classification
+- Multimodal AI vision pre-judge (`functions/api/ai-judge/classify.ts`) and Python/NIM sync (`functions/api/admin/ai-categorise.ts`) detect NSFW/adult content and set `is_nsfw = 1, nsfw_flagged_by = 'ai-judge'`.
+- Curator toggle on `/curate` (`functions/api/curate/nsfw.ts` & `src/curate/CurateApp.tsx`) allows instant non-destructive NSFW tagging.
+- Admin dashboard (`/admin`) features an NSFW filter tab and cyber-pink badge.
+- Reports moderation (`/reports`) allows non-destructive "Mark NSFW" resolution.
+
