@@ -2,7 +2,7 @@
 
 ## Current Storage
 
-The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 13 production D1 migrations applied from `000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`).
+The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 14 production D1 migrations applied from `000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`).
 
 Current storage layers:
 
@@ -90,6 +90,22 @@ Only records with `status = 'active'` and `is_active = 1` should be returned to 
 - `status`: State of the report (`pending`, `resolved`, `dismissed`).
 - `created_at`: Creation timestamp.
 - `updated_at`: Last updated timestamp.
+
+### Force Removals Audit Table: `meme_force_removals`
+Created in Migration 011 (`011_force_removals.sql`) to provide an immutable audit trail when non-meme media or corrupt files are permanently expunged:
+- `id`: Auto-generated string ID (`frm-` prefix followed by hex random blob).
+- `meme_id`: Unique target meme ID (foreign key to `memes(id)`).
+- `title`: Cached title of the removed meme.
+- `image_url`: Original delivery/staging URL.
+- `storage_path`: Original R2 storage path.
+- `r2_key`: Extracted object key within Cloudflare R2 bucket `memes`.
+- `removed_by`: ID of the judge who executed the removal (foreign key to `cat_users(id)`).
+- `removed_by_name`: Display name of the judge.
+- `reason`: Optional reason specified during removal (up to 200 characters).
+- `r2_deleted`: Integer boolean (1 if object was deleted from R2, 0 if R2 deletion failed or media was non-R2/Reddit).
+- `r2_error`: Error message text if R2 deletion encountered an exception.
+- `removed_at`: ISO timestamp when removal was executed.
+- `r2_deleted_at`: ISO timestamp when R2 deletion was confirmed.
 
 ## API Flow
 
@@ -182,6 +198,7 @@ The platform enforces a canonical single-source-of-truth contract across `memes`
    - **`POST /api/curate/approve`**: Any human judge (Judge 1, 2, or 3) adopting an AI decision or finalizing a curation writes atomically to both `meme_curation` (audit log) and `meme_curation_final` (authoritative decision), automatically updating `memes` (`is_active`, `status`, `curation_status`, `tags`, `category`) without needing SuperAdmin arbitration.
    - **`POST /api/curate/force-remove` (`Shift+Delete`)**: Allows curators to permanently vanish non-meme / invalid media from the R2 storage bucket and all D1 tables (`memes`, `meme_curation`, `meme_curation_final`, `ai_curation_predictions`) in a single non-undoable operation.
 5. **Migrations**:
+   - **Migration 011 (`011_force_removals.sql`)**: Created `meme_force_removals` audit table and indexes (`idx_force_removals_removed_at`, `idx_force_removals_removed_by`, `idx_force_removals_meme_id`) to track permanent purging of non-meme content from R2 and D1.
    - **Migration 011 (`011_reconcile_active_and_curation_sync.sql`)**: Eliminated drift by enforcing $\text{status} = \text{'active'} \iff \text{is\_active} = 1$.
    - **Migration 012 (`012_add_curation_status_to_memes.sql`)**: Added `curation_status` column to `memes`, backfilling `'keep'` (111) and `'excluded'` (53) from `meme_curation_final` while leaving uncurated backlog items as `NULL`. Automatically maintained on all future superadmin single and bulk resolutions.
 

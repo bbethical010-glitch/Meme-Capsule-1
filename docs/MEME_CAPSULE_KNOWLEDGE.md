@@ -9,13 +9,13 @@
 > **Official Web Platform:** [https://memecapsule.wtf](https://memecapsule.wtf) (Vite / React Multi-Page Static Prerendered)  
 > **Serverless Edge Backend:** [https://meme-capsule-eww.pages.dev](https://meme-capsule-eww.pages.dev) (Cloudflare Pages, D1 SQLite, R2 CDN)  
 > **Project Team & Engineering Leadership:**  
-> - **Anmol Verma** (`editorav010-dev` / `anmolverma.env@gmail.com`): Lead Backend Developer — Full backend engineering, serverless architecture, core algorithms, AI tools implementation, security, curation systems, and all internal backend workbenches.  
-> - **Pratham Pandey** (`bbethical010-glitch` / `bbethical010@gmail.com`): Lead Frontend Developer & Original Ideator — Founding concept, frontend landing pages, Android APK development, app theme, typography, UI/UX, Java Android bridge, and client-side integrations.  
-> - **Faraz Ahmed** (`thesplashsnize@gmail.com`): Social Media & Marketing Lead — Social media management, content planning, niche analysis, scripting, and marketing campaigns.  
+> - **Anmol Verma** (`editorav010-dev`): Lead Backend Developer — Full backend engineering, serverless architecture, core algorithms, AI tools implementation, security, curation systems, and all internal backend workbenches.  
+> - **Pratham Pandey** (`bbethical010-glitch`): Lead Frontend Developer & Original Ideator — Founding concept, frontend landing pages, Android APK development, app theme, typography, UI/UX, Java Android bridge, and client-side integrations.  
+> - **Faraz Ahmed**: Social Media & Marketing Lead — Social media management, content planning, niche analysis, scripting, and marketing campaigns.  
 > **Official App Email (User Support & Marketing):** `support@memecapsule.wtf`  
 > **Official Social Media:**  
 > Instagram: https://www.instagram.com/capsule.meme/ | X: https://x.com/memecapsule_ | Threads: https://www.threads.com/@capsule.meme  
-> **Last Master Synchronization:** September 26, 2026  
+> **Last Master Synchronization:** October 13, 2026   
 
 ---
 
@@ -33,19 +33,21 @@
    - 3.5 [Neo-Brutalist Viral Share Bottom Sheet & Social Dispatch System](#35-neo-brutalist-viral-share-bottom-sheet--social-dispatch-system)
    - 3.6 [Native Android Bridge & Scoped MediaStore Storage (`MainActivity.java`)](#36-native-android-bridge--scoped-mediastore-storage-mainactivityjava)
    - 3.7 [Meme Vault, Mood Boards ("Pinned Energy") & Offline Collections](#37-meme-vault-mood-boards-pinned-energy--offline-collections)
-   - 3.8 [Mobile Monetization (AdMob + Google Play In-App Purchases)](#38-mobile-monetization-admob--google-play-in-app-purchases)
-   - 3.9 [Mobile Safety, Reporting & Local Blocklist](#39-mobile-safety-reporting--local-blocklist)
-   - 3.10 [Critical Engineering Guardrails & Styling Gotchas (Tailwind v4)](#310-critical-engineering-guardrails--styling-gotchas-tailwind-v4)
+   - 3.8 [Mobile Monetization (AdMob + Google Play In-App Purchases & Neo-Brutalist Store)](#38-mobile-monetization-admob--google-play-in-app-purchases--neo-brutalist-store)
+   - 3.9 [Mobile Safety, Age Verification (DOB) & Content Reporting](#39-mobile-safety-age-verification-dob--content-reporting)
+   - 3.10 [Google Play Store In-App Rating & Review Engine (`RatingModal.tsx`)](#310-google-play-store-in-app-rating--review-engine-ratingmodaltsx)
+   - 3.11 [Critical Engineering Guardrails & Styling Gotchas (Tailwind v4)](#311-critical-engineering-guardrails--styling-gotchas-tailwind-v4)
 4. [PART B: PROMOTIONAL, PRESS & WEB PLATFORM (`memecapsule.wtf`)](#4-part-b-promotional-press--web-platform-memecapsulewtf)
-   - 4.1 [Platform Architecture & Static HTML Prerendering](#41-platform-architecture--static-html-prerendering)
+   - 4.1 [Platform Architecture, Modernized Stack & Static HTML Prerendering](#41-platform-architecture-modernized-stack--static-html-prerendering)
    - 4.2 [Interactive Live Drop Preview Simulator & Quota Lockout Bumper](#42-interactive-live-drop-preview-simulator--quota-lockout-bumper)
    - 4.3 [3D Interactive Device Mockups with Authentic WebP Screenshots & Lightbox](#43-3d-interactive-device-mockups-with-authentic-webp-screenshots--lightbox)
-   - 4.4 [Kage-Inspired Atmospheric Web UI (Preloader, Cursor, Grain, Vignette, Scroll Rail)](#44-kage-inspired-atmospheric-web-ui-preloader-cursor-grain-vignette-scroll-rail)
+   - 4.4 [Kage-Inspired Atmospheric Web UI](#44-kage-inspired-atmospheric-web-ui)
    - 4.5 [Cyberpunk Acid Glitch Mode Switcher](#45-cyberpunk-acid-glitch-mode-switcher)
-   - 4.6 [Section 04.5 "Under the Hood" Technical Transparency](#46-section-045-under-the-hood-technical-transparency)
-   - 4.7 [Multi-Page Web Routing: `/about` (Press Kit), `/privacy`, and Contact Form](#47-multi-page-web-routing-about-press-kit-privacy-and-contact-form)
-   - 4.8 [Web Monetization: Google AdSense Unit `meme1`](#48-web-monetization-google-adsense-unit-meme1)
-   - 4.9 [Search, Generative & AI Engine Optimization (SEO, GEO & AEO)](#49-search-generative--ai-engine-optimization-seo-geo--aeo)
+   - 4.6 [Technical Transparency & "How It Works" Section](#46-technical-transparency--how-it-works-section)
+   - 4.7 [Multi-Page Web Routing & Dedicated Pages](#47-multi-page-web-routing--dedicated-pages)
+   - 4.8 [Serverless Contact API via Resend Edge Function](#48-serverless-contact-api-via-resend-edge-function)
+   - 4.9 [Web Monetization: Google AdSense Unit `meme1`](#49-web-monetization-google-adsense-unit-meme1)
+   - 4.10 [Search, Generative & AI Engine Optimization (SEO, GEO & AEO)](#410-search-generative--ai-engine-optimization-seo-geo--aeo)
 5. [PART C: DEVELOPER / INTERNAL BACKEND & EDGE INFRASTRUCTURE](#5-part-c-developer--internal-backend--edge-infrastructure)
    - 5.1 [Serverless Edge Infrastructure (Cloudflare Pages Functions)](#51-serverless-edge-infrastructure-cloudflare-pages-functions)
    - 5.2 [Cloudflare D1 Database Schemas & 3-Tier Partitioning Architecture (Migration 012)](#52-cloudflare-d1-database-schemas--3-tier-partitioning-architecture-migration-012)
@@ -179,7 +181,7 @@ Any meme that is unfinalized, in judging, or excluded is mathematically impossib
 
 Meme Capsule is a three-person collaborative project with a clear division of architectural, consumer-facing, and marketing responsibilities:
 
-- **Anmol Verma** (Lead Backend Developer — GitHub: [`editorav010-dev`](https://github.com/editorav010-dev), Email: `anmolverma.env@gmail.com`):
+- **Anmol Verma** (Lead Backend Developer — GitHub: [`editorav010-dev`](https://github.com/editorav010-dev)):
   - Full backend engineering & Cloudflare Pages Functions serverless architecture
   - Backend architecture and systems implementation
   - Core algorithms: randomization, deduplication, 3-tier curation status partitioning, and edge ranking
@@ -189,7 +191,7 @@ Meme Capsule is a three-person collaborative project with a clear division of ar
   - Admin, SuperAdmin, and all internal backend workbenches (/admin, /curate, /categorise, /reports, /ai-judge)
   - The underlying technical and mathematical logic behind the Meme Capsule delivery engine
 
-- **Pratham Pandey** (Lead Frontend Developer & Original Ideator — GitHub: [`bbethical010-glitch`](https://github.com/bbethical010-glitch), Email: `bbethical010@gmail.com`):
+- **Pratham Pandey** (Lead Frontend Developer & Original Ideator — GitHub: [`bbethical010-glitch`](https://github.com/bbethical010-glitch)):
   - **Original concept, initial vision, and founding idea behind Meme Capsule**
   - Frontend landing pages and promotional web platform (memecapsule.wtf)
   - Public Android mobile application development (`com.meme.capsule` via Capacitor 8, React 19, Tailwind CSS v4)
@@ -198,7 +200,7 @@ Meme Capsule is a three-person collaborative project with a clear division of ar
   - Java Android bridge (`MainActivity.java`) and Android MediaStore integrations
   - Consumer-facing frontend engineering, animations, and client build setup
 
-- **Faraz Ahmed** (Social Media & Marketing Lead — Email: `thesplashsnize@gmail.com`):
+- **Faraz Ahmed** (Social Media & Marketing Lead):
   - Management of all official Meme Capsule social media handles
   - Content planning, niche analysis, and editorial quality control of all social content
   - Scripting, brand voice, and campaign copywriting
@@ -277,9 +279,11 @@ The mobile app rejects infinite feed algorithms. It is designed as an **Arcade V
 | **Targeted Sharing** | **Direct Social Intent Bridge** | `MainActivity.java` | `shareImageToApp()` targets specific package names (WhatsApp, Instagram, Facebook, X, Telegram, Discord) with automatic fallback to `Intent.createChooser`. |
 | **Collections** | **Meme Vault (Favorites)** | `src/App.tsx` | Searchable local gallery of saved memes with viewed/fetched/liked counters. Free tier limit: 20 memes (`FREE_VAULT_LIMIT = 20`); Pro tier: unlimited. |
 | **Themed Binders** | **Mood Boards ("Pinned Energy")** | `src/App.tsx`, `CreateBoardModal.tsx`, `UnpinModal.tsx` | Custom color-coded mood boards (`primary`, `secondary`, `tertiary`) with synchronized `meme_pinboard` + `meme_favorites` storage for reliable thumbnail rendering. |
-| **Settings & Privacy** | **Settings & History Erasure Page** | `src/App.tsx` (`activeTab === 'settings'`) | 4th bottom navigation tab & header gear shortcut consolidating **Privacy Policy (v1.1)** (removed from the face of Home/Vault/Mood Boards), **Local Device Footprint KPIs**, **Clear Past Viewing History & Stats**, **Empty Vault & Mood Boards**, **Unblock Reported Memes**, **Delete All App History & Data** (with 2-step confirmation), **Capsule Feed Toggles** (Hybrid Reddit Relay, 7-Meme Turbo Buffer, Card Shake Effects), **Pro Upgrade/Restore**, and **Replay Gesture Tour**. |
+| **Settings & Privacy** | **Settings & Legal Page** | `src/App.tsx` (`activeTab === 'settings'`) | 4th bottom navigation tab & header gear shortcut consolidating **Direct Privacy Policy Link (`https://memecapsule.wtf/privacy`)**, **Website CTA Button (`https://memecapsule.wtf`)**, **Official Support Email (`support@memecapsule.wtf`)** (creator name and social handles removed from UI), **Verified 18+ Age Badge**, **Play Store Rating Trigger**, **Local Device Footprint KPIs**, **Clear Past Viewing History & Stats**, **Empty Vault & Mood Boards**, **Unblock Reported Memes**, **Delete All App History & Data** (2-step confirmation), **Capsule Feed Toggles**, **Store & Theme Equipper**, and **Replay Gesture Tour**. |
+| **Age Verification** | **First-Launch Date of Birth Gate (18+)** | `src/components/DateOfBirthModal.tsx` | Non-bypassable mandatory modal (`z-[2000]`) presented immediately **after the Onboarding Guide** on first app launch before entering the deck. DD/MM/YYYY numeric inputs + native DatePicker, strict 18+ age validation, locked to `localStorage('meme_capsule_user_dob')`. |
+| **Play Store Rating** | **In-App Rating & Review Engine** | `src/components/RatingModal.tsx` & `src/App.tsx` | Neo-Brutalist 5-star reaction popup (`GOD-TIER DANKNESS!`, `CERTIFIED BANGERS!`) triggered after viewed meme intervals. Redirects to Google Play Store listing (`market://details?id=com.meme.capsule` / `openPlayStoreListing`), provides **24-hour snooze deferral**, and permanently suppresses once submitted. |
 | **Safety & UGC** | **Content Reporting & Blocklist** | `src/ReportModal.tsx` & `src/App.tsx` | Store-compliant reporting modal (`POST /api/report`). Reported memes are written to `localStorage('reported_memes')` and permanently filtered out of rotation. |
-| **Monetization** | **AdMob + In-App Purchase (PRO)** | `src/ProUpgradeModal.tsx` & `src/App.tsx` | Interstitial ads every 4th meme + Rewarded ads for bonus drops (`@capacitor-community/admob`). One-time Pro upgrade (`remove_ads_forever` via `@capgo/native-purchases`) unlocks Zero Ads, Unlimited Vault, and permanent Triple Drop. |
+| **Monetization & Store** | **In-App Capsule Store & AdMob** | `src/components/store/`, `billing.ts`, `entitlements.ts` | Clash of Clans horizontal snap-scrolling store (`snap-x snap-mandatory`), sticky category tabs, 11 single unlocks + 5 bundles, live dynamic savings badges, 8s theme preview, celebratory slam animation, and **QA Testing Mode** (fallback reference pricing, simulated test purchase, and 1-tap entitlement reset). Non-intrusive AdMob interstitial every 4th meme (suppressed if `hasAdsRemoved()`). |
 
 ### 3.4 Card Deck, Gestures & Instant-Touch Overlay Architecture
 The card deck is orchestrated by `MemeStack.tsx` using `@react-spring/web` and `@use-gesture/react`:
@@ -384,7 +388,33 @@ Registered on the Android WebView as `window.MemeCapsuleAndroid`:
 - **Reporting Modal (`ReportModal.tsx`):** Users can report inappropriate content (`NSFW`, `Hate Speech`, `Harassment`, `Copyright`).
 - **Immediate Local Suppression:** Submitting a report triggers `POST /api/report` to Cloudflare Pages and immediately adds the meme ID to `localStorage('reported_memes')`. The client filtering loop (`fetchValidMeme()`) permanently drops reported memes from subsequent card drops.
 
-### 3.10 Critical Engineering Guardrails & Styling Gotchas (Tailwind v4)
+### 3.10 Google Play Store In-App Rating & Review Engine (`RatingModal.tsx`)
+To drive organic Google Play Store reviews while honoring the app's Neo-Brutalist design language and respectful UX philosophy:
+- **Eligibility & Periodic Trigger Logic (`checkRatingPromptEligibility` in `src/App.tsx`):**
+  - Evaluated on card deck transitions (`totalMemesViewed`).
+  - **Suppression Gates:** Suppressed permanently if feedback was already registered (`localStorage('meme_capsule_rating_completed') === 'true'`).
+  - **Active Session Safety:** Never opens while other modals are active (Onboarding, DOB gate, Report modal, Unpin dialog, Mood board composer, Store overlay, or active Rewarded Ad).
+  - **Snooze Check:** Suppressed if the user deferred within the past 24 hours (`localStorage('meme_capsule_rating_deferred_until') > Date.now()`).
+  - Triggers after an initial viewing threshold (e.g. 15 memes) and periodically re-checks at spaced intervals.
+- **Neo-Brutalist Visual Design:**
+  - Strict palette adherence: background `#1c1b1b` / `#131313`, gold border `#f4c300`, solid offset shadow (`shadow-[8px_8px_0px_0px_#f4c300]`), zero border radius, Anton & Oswald typography.
+  - Interactive 5-star reaction selector with dynamic feedback badges:
+    - 5 Stars: `GOD-TIER DANKNESS! 🔥` (`#FACC15`)
+    - 4 Stars: `CERTIFIED BANGERS! ⚡` (`#00E5FF`)
+    - 3 Stars: `SOLID CHUCKLES 👌` (`#34C759`)
+    - 2 Stars: `NEEDS MORE SPICE 🫠` (`#FF9800`)
+    - 1 Star: `MID CORP SLOP 💀` (`#FF3B30`)
+- **Direct Play Store Dispatch (`redirectToPlayStore`):**
+  - First attempts to call the native Java bridge: `window.MemeCapsuleAndroid.openPlayStoreListing()`.
+  - Automatically falls back to opening `https://play.google.com/store/apps/details?id=com.meme.capsule` via `window.open` with `noopener,noreferrer`.
+- **24-Hour Snooze Deferral:**
+  - Clicking `[X]` or `SNOOZE 24H (REMIND ME LATER)` invokes `handleDeferRating()`, setting `meme_capsule_rating_deferred_until = Date.now() + 86400000` and displaying a Neo-Brutalist confirmation toast (`RATING SNOOZED FOR 24 HOURS ⏰`).
+- **Permanent Dismissal:**
+  - Once the user rates the app or registers feedback, `meme_capsule_rating_completed` is set to `'true'` in `localStorage`. The rating prompt will NEVER display automatically again.
+- **On-Demand Settings Action:**
+  - Users can manually access the rating modal at any time via the "RATE ON PLAY STORE" button on the Settings screen.
+
+### 3.11 Critical Engineering Guardrails & Styling Gotchas (Tailwind v4)
 1. **Tailwind CSS v4 `@theme` Spacing Token Gotcha (`src/index.css`):**
    - `src/index.css` defines custom spacing tokens (`--spacing-xs: 8px`, `--spacing-sm: 16px`, `--spacing-md: 24px`, `--spacing-lg: 40px`, `--spacing-xl: 64px`).
    - In Tailwind CSS v4, utility classes like `max-w-md` or `max-w-sm` resolve to `var(--spacing-md)` (`24px`) and `var(--spacing-sm)` (`16px`).
@@ -396,10 +426,19 @@ Registered on the Android WebView as `window.MemeCapsuleAndroid`:
 
 ## 4. PART B: PROMOTIONAL, PRESS & WEB PLATFORM (`memecapsule.wtf`)
 
-### 4.1 Platform Architecture & Static HTML Prerendering
-- **Hosting & Domain:** Deployed on GitHub Pages with custom domain DNS routing to `https://memecapsule.wtf`.
-- **Tech Stack:** React 18, Vite 5, Tailwind CSS v3, React Router DOM v6.
-- **Deterministic Static Prerendering:** Uses `vite-plugin-prerender` with deterministic `ReactSSRRenderer` to produce fully-baked HTML files for `/`, `/about`, and `/privacy` (with standalone static fallback `public/privacy.html`), ensuring complete search engine indexability with zero client-side JavaScript execution.
+### 4.1 Platform Architecture, Modernized Stack & Static HTML Prerendering
+- **Hosting & Domain:** Deployed on GitHub Pages (`bbethical010-glitch.github.io`) with custom domain DNS routing to `https://memecapsule.wtf`.
+- **Modernized Tech Stack:** 
+  - React 19 (`^19.2.8`) & React DOM 19 (`^19.2.8`)
+  - Vite 8 (`^8.2.0`) with build target set to `es2019` for broad device compatibility
+  - React Router DOM v7 (`^7.18.2`)
+  - Motion v13 (`^13.4.0`) for fluid micro-interactions
+  - Tailwind CSS v3.4 (`^3.4.19`) with PostCSS & Autoprefixer
+  - TypeScript 6 (`~6.0.2`) with strict type checking
+- **Deterministic Static Prerendering (`ReactSSRRenderer`):** 
+  Uses `vite-plugin-prerender` with an in-process headless `ReactSSRRenderer` (leveraging `react-dom/server` and `react-router-dom/server`'s `StaticRouter`) to produce fully-baked, SEO-ready static HTML files for all 6 public routes (`/`, `/about`, `/team`, `/faq`, `/how-it-works`, `/privacy`).
+- **Dynamic Route-Specific SEO Metadata Injection:** 
+  During build-time prerendering, `ReactSSRRenderer` reads route configurations (`ROUTE_SEO`) and surgically injects route-specific `<title>`, `<meta name="description">`, `<link rel="canonical">`, Open Graph tags (`og:title`, `og:description`, `og:url`), and Twitter card metadata directly into each route's generated `index.html`. This ensures 100% crawl fidelity without relying on JavaScript hydration or client-side redirects (`404.html`).
 
 ### 4.2 Interactive Live Drop Preview Simulator & Quota Lockout Bumper
 Located in `src/components/MemePreview.tsx`:
@@ -407,51 +446,66 @@ Located in `src/components/MemePreview.tsx`:
 - **5-Drop Quota Counter:** Users can experience 5 authentic live drops on the web (`5 -> 4 -> 3 -> 2 -> 1 -> 0`).
 - **Conversion Lockout Bumper:** Upon opening the 5th capsule, a Neo-Brutalist lockout bumper covers the card:
   - Header: `CAPSULE DEPLETED`
-  - Body: Encourages installing the Android app for unlimited daily drops.
+  - Body: Encourages installing the Android app for unlimited daily drops with rolling prefetch.
   - CTA Button: Direct Google Play install button with UTM campaign attribution (`getPlayStoreUrl('web_preview_bumper')`).
 
 ### 4.3 3D Interactive Device Mockups with Authentic WebP Screenshots & Lightbox
 Located in `src/components/Screenshots.tsx`:
-- **5 Authentic Android App Screenshots:** Replaced external placeholder graphics with 5 real Android screen captures in high-density WebP + JPEG format (Home, Loading, Loaded, Vault, Mood Boards).
+- **5 Authentic Android App Screenshots:** High-density WebP + JPEG captures of the actual Android app (Home, Loading, Loaded, Vault, Mood Boards).
 - **3D Mouse-Tilt Physics:** Dynamic mouse-tilt calculations (`rotateX`, `rotateY`, `scale3d`) with heavy Neo-Brutalist drop shadows (`25px 25px 0px -10px #f4c300`).
-- **Fullscreen Lightbox Zoom:** Clicking any mockup opens a fullscreen lightbox zoom modal with keyboard arrow navigation and backdrop blur.
+- **Fullscreen Lightbox Zoom:** Clicking any mockup opens a fullscreen lightbox zoom modal with keyboard arrow navigation, escape-key dismiss, and backdrop blur.
 
 ### 4.4 Kage-Inspired Atmospheric Web UI
 - **Preloader (`Preloader.tsx`):** Animated entrance splash screen displaying the official brand emblem and `.pre-bar` progress bar.
 - **Custom Magnetic Cursor (`CustomCursor.tsx`):** Fluid circular cursor (`.cur-dot`) with magnetic hover expansion (`.cur-dot.act`) over interactive elements.
-- **Film Grain & Vignette (`GrainOverlay.tsx` & `Vignette.tsx`):** GPU-accelerated CRT arcade grain texture with automatic disabling for users with `prefers-reduced-motion`.
+- **Film Grain & Vignette (`GrainOverlay.tsx` & `Vignette.tsx`):** GPU-accelerated CRT arcade grain texture optimized for smooth Interaction to Next Paint (INP) with automatic disabling for users with `prefers-reduced-motion`.
 - **Desktop Scroll Rail (`ScrollRail.tsx`):** Fixed vertical navigation indicator reflecting active page sections.
 
 ### 4.5 Cyberpunk Acid Glitch Mode Switcher
 - Toggled from the navigation bar (`Navbar.tsx`).
 - Injects `html.theme-glitch` into the DOM, applying CRT scanlines, 115° hue rotation, chromatic aberration, and randomized keyframe skews.
 
-### 4.6 Section 04.5 "Under the Hood" Technical Transparency
-Located in `src/components/HowItWorksDetail.tsx`:
-- Educates visitors and search engines on the 5,000+ meme catalog, Cloudflare D1/R2 zero-egress architecture, Reddit auxiliary feed SFW filtering, and the zero-account privacy philosophy.
+### 4.6 Technical Transparency & "How It Works" Section
+- **Homepage Summary (`src/components/HowItWorks.tsx`):** High-level 3-step explanation of the single-tap delivery mechanism, local FIFO prefetch, and zero-algorithm philosophy.
+- **Dedicated Deep-Dive (`src/pages/HowItWorksPage.tsx` & `src/components/HowItWorksDetail.tsx`):** Detailed breakdown covering the curated catalog, edge delivery, Reddit auxiliary feed SFW filtering, and the zero-account, in-app privacy erasure architecture.
 
-### 4.7 Multi-Page Web Routing: `/about` (Press Kit), `/privacy`, and Contact Form
-- **Home (`/`):** Full interactive landing experience.
-- **About & Press Kit (`/about`):** Dedicated route featuring official Entity Definition, Quick Facts Grid, One-Liner Copy Kit with instant copy-to-clipboard buttons, and Downloadable Brand Assets (WebP/PNG logos, OG banners).
-- **Privacy Policy (`/privacy`):** Store-compliant disclosures covering Google Analytics 4, AdSense cookies, AdMob identifiers, and zero personal data collection.
-- **Serverless Contact Form (`ContactForm.tsx`):** Direct feedback submission targeting Formspree endpoint `xwlenwzr` with a mandatory privacy consent checkbox (replacing scrapped Giscus GitHub comments).
+### 4.7 Multi-Page Web Routing & Dedicated Pages
+The platform implements full client-side routing and static build prerendering across 6 distinct pages:
+- **Home (`/`):** Full interactive landing experience featuring hero, live drop simulator, 3D screenshots, features grid, How It Works summary, and download CTAs.
+- **How It Works (`/how-it-works`):** Standalone route featuring detailed system architecture and anti-algorithm delivery philosophy.
+- **FAQ (`/faq`):** Standalone route housing an exhaustive 15-question accordion grid (`src/constants/faq.ts`) with quick back-navigation and direct app download banners.
+- **About & Press Kit (`/about`):** Dedicated route featuring official Entity Definition, Quick Facts Grid, One-Liner Copy Kit with instant clipboard copy, and downloadable brand assets (logos, OG banners).
+- **Meet the Team (`/team`):** Dedicated team page attributing core engineering leadership:
+  - **Pratham Pandey:** Lead Frontend Developer & Original Ideator
+  - **Anmol Verma:** Lead Backend Developer
+  - **Faraz Ahmed:** Social Media & Marketing Lead
+- **Privacy Policy (`/privacy`):** Store-compliant disclosures covering Google Analytics 4, AdSense cookies, AdMob identifiers, zero personal data collection, and local storage data deletion. Includes a canonical link referencing `https://memecapsule.wtf/privacy` to prevent crawler duplicate URL warnings against `public/privacy.html`.
 
-### 4.8 Web Monetization: Google AdSense Unit `meme1`
+### 4.8 Serverless Contact API via Resend Edge Function
+Located in `functions/api/contact.ts` and `src/components/ContactForm.tsx`:
+- **Cloudflare Pages Functions + Resend API:** Replaced external Formspree dependency with a custom serverless edge endpoint using the Resend API (`RESEND_API_KEY`).
+- **Security & Spam Protection:** Implements invisible honeypot field (`_hp`), strict email regex validation, mandatory privacy consent verification, and HTML character escaping.
+- **Structured Notifications:** Delivers formatted dark-mode HTML email notifications to `support@memecapsule.wtf` with sender details and message categorization.
+- **CORS & Reliability:** Full preflight CORS headers (`POST, OPTIONS`) and friendly client-side error handling.
+
+### 4.9 Web Monetization: Google AdSense Unit `meme1`
 - Integrated via `src/components/AdBanner.tsx`.
-- Client ID: `ca-pub-2093403233028868`.
-- Ad Slot: `6291908699` (`meme1`).
-- Placed cleanly below the live drop simulator with zero Cumulative Layout Shift (CLS).
+- Client ID: `ca-pub-2093403233028868`, Ad Slot: `6291908699` (`meme1`).
+- Placed cleanly below the live drop simulator with deferred script initialization to eliminate Cumulative Layout Shift (CLS) and protect Total Blocking Time (TBT).
 
-### 4.9 Search, Generative & AI Engine Optimization (SEO, GEO & AEO)
+### 4.10 Search, Generative & AI Engine Optimization (SEO, GEO & AEO)
 1. **Schema.org Structured Data (JSON-LD):**
-   - `WebSite` (`@id: #website`): Canonical entity and search action.
-   - `Organization` (`@id: #organization`): Developed collaboratively by Anmol Verma (Lead Backend Developer — backend architecture, algorithms, AI, security & curation systems), Pratham Pandey (Lead Frontend Developer & Original Ideator — founding concept, APK, web platform & UI/UX), and Faraz Ahmed (Social Media & Marketing Lead).
-   - `MobileApplication` (`@id: #app`): Directly links to Google Play package `com.meme.capsule`, rating, price ($0), and Android OS.
-   - `FAQPage`: Formats all 15 FAQ questions into Google SERP rich snippet accordions.
+   - `WebSite` (`@id: #website`): Canonical entity definition and site search actions.
+   - `Organization` (`@id: #organization`): Canonical engineering team attribution linking to verified GitHub and Google Play profiles.
+   - `MobileApplication` (`@id: #app`): Directly linked to Google Play package `com.meme.capsule`, free price rating ($0), and Android OS.
+   - `FAQPage`: Formats all 15 FAQ questions into Google SERP rich snippet expandable accordions.
 2. **Generative Engine Optimization (GEO):**
-   - `public/llms.txt`: Concise executive summary for LLMs.
+   - `public/llms.txt`: Concise executive summary and manifest for AI engines.
    - `public/llms-full.txt`: Deep architectural context for AI search engines (ChatGPT Search, Perplexity, Claude, Gemini).
    - `public/robots.txt`: Explicitly whitelists frontier AI scrapers (`GPTBot`, `ClaudeBot`, `PerplexityBot`, `Google-Extended`).
+3. **Google Search Console & Indexing Hygiene:**
+   - `public/sitemap.xml`: Cleaned of fragment URLs (e.g. `/#features`), listing exclusively 200 OK standalone prerendered URLs (`/`, `/how-it-works`, `/faq`, `/about`, `/team`, `/privacy`) with accurate `<lastmod>` timestamps.
+   - Elimination of SPA 404 redirect dependency through comprehensive static prerender files for all routes.
 
 ---
 
@@ -632,15 +686,17 @@ All three codebases share a unified **Neo-Brutalist Cyber-Arcade** design langua
 | **Mobile App (APK)** | AdMob Interstitials & Rewarded Drops | `[IMPLEMENTED]` | `@capacitor-community/admob` |
 | **Mobile App (APK)** | In-App Purchases (Pro Tier ₹99) | `[IMPLEMENTED]` | `@capgo/native-purchases` (`remove_ads_forever`) |
 | **Mobile App (APK)** | UGC Reporting & Local Blocklist | `[IMPLEMENTED]` | `ReportModal.tsx` + `localStorage('reported_memes')` |
-| **Promo Web (`.wtf`)** | Official Multi-Page Site (`memecapsule.wtf`)| `[IMPLEMENTED]` | React 18, Vite 5, GitHub Pages DNS routing |
+| **Promo Web (`.wtf`)** | Official Multi-Page Site (`memecapsule.wtf`)| `[IMPLEMENTED]` | React 19, Vite 8, React Router v7, GitHub Pages |
 | **Promo Web (`.wtf`)** | Interactive Live Drop Preview Simulator | `[IMPLEMENTED]` | `MemePreview.tsx` (5-drop quota & fallback pool) |
 | **Promo Web (`.wtf`)** | Conversion Lockout Bumper | `[IMPLEMENTED]` | Bumper overlay with Play Store UTM tracking |
 | **Promo Web (`.wtf`)** | 3D Interactive Phone Mockups (WebP) | `[IMPLEMENTED]` | `Screenshots.tsx` (5 authentic WebP captures + lightbox) |
 | **Promo Web (`.wtf`)** | Kage Atmospheric UI (Preloader, Cursor) | `[IMPLEMENTED]` | `Preloader.tsx`, `CustomCursor.tsx`, `ScrollRail.tsx` |
-| **Promo Web (`.wtf`)** | Section 04.5 Under the Hood | `[IMPLEMENTED]` | `HowItWorksDetail.tsx` (5,000+ library breakdown) |
-| **Promo Web (`.wtf`)** | Dedicated About & Press Kit (`/about`) | `[IMPLEMENTED]` | `About.tsx` (Entity definition, copy kit, asset downloads)|
-| **Promo Web (`.wtf`)** | Google AdSense Unit `meme1` | `[IMPLEMENTED]` | `AdBanner.tsx` (`slot 6291908699`, `ca-pub-2093403233028868`) |
-| **Promo Web (`.wtf`)** | Deterministic Static Prerender | `[IMPLEMENTED]` | `vite-plugin-prerender` with `ReactSSRRenderer` |
+| **Promo Web (`.wtf`)** | How It Works & Transparency (`/how-it-works`)| `[IMPLEMENTED]` | `HowItWorksPage.tsx` & `HowItWorksDetail.tsx` |
+| **Promo Web (`.wtf`)** | Dedicated About, Press Kit & Team Pages | `[IMPLEMENTED]` | `/about`, `/team` (Leadership & downloadable assets) |
+| **Promo Web (`.wtf`)** | Standalone 15-Question FAQ Route (`/faq`) | `[IMPLEMENTED]` | `FAQPage.tsx`, `faq.ts` (Rich snippet accordions) |
+| **Promo Web (`.wtf`)** | Resend Edge API Contact Function | `[IMPLEMENTED]` | `functions/api/contact.ts` + `ContactForm.tsx` |
+| **Promo Web (`.wtf`)** | Google AdSense Unit `meme1` | `[IMPLEMENTED]` | `AdBanner.tsx` (`slot 6291908699`, deferred load) |
+| **Promo Web (`.wtf`)** | Deterministic Static Prerender (6 Routes) | `[IMPLEMENTED]` | `vite-plugin-prerender` + per-route SEO injection |
 | **Edge Backend** | Serverless Edge API on Cloudflare Pages | `[IMPLEMENTED]` | `functions/api/random-meme.ts`, `daily-meme.ts`, etc. |
 | **Edge Backend** | Cloudflare D1 SQLite Database (13 Migrations)| `[IMPLEMENTED]` | `d1/migrations/` (000 through 012) |
 | **Edge Backend** | 3-Tier Status Partitioning (Migration 012) | `[IMPLEMENTED]` | `curation_status`: 111 Keep, 53 Excluded, 4,947 Backlog |
@@ -652,7 +708,7 @@ All three codebases share a unified **Neo-Brutalist Cyber-Arcade** design langua
 | **Edge Backend** | Multimodal AI Pre-Curator Loop (`/ai-judge`)| `[IMPLEMENTED]` | Gemini Vision API & NVIDIA NIM Llama 3.2 Vision runner |
 | **Edge Backend** | Telemetry Recalculation Engine | `[IMPLEMENTED]` | `functions/api/admin/analytics/recalculate.ts` |
 | **Discontinued UI** | Legacy Pastel Landing UI (`App.tsx`) | `[REMOVED]` | Removed from backend repo; default route `/` is `/curate` |
-| **Discontinued Web** | Giscus GitHub Comments on Website | `[REMOVED]` | Replaced with Formspree contact form + privacy consent |
+| **Discontinued Web** | Giscus / Formspree Contact Dependencies | `[REMOVED]` | Migrated to Cloudflare Pages Functions + Resend API |
 | **Discontinued Web** | Stacking Card Scroll Animation | `[REVERTED]` | Replaced with authentic Kage scroll reveal |
 
 ---
@@ -738,11 +794,11 @@ PACKAGE ID: com.meme.capsule
 CURRENT ANDROID VERSION: v2.7 (versionCode 18)
 OFFICIAL WEBSITES: https://memecapsule.wtf (Web Platform) | https://meme-capsule-eww.pages.dev (Edge Backend)
 DEVELOPERS & LEADERSHIP:
-- Anmol Verma (anmolverma.env@gmail.com / GitHub: editorav010-dev)
+- Anmol Verma (GitHub: editorav010-dev)
   Lead Backend Developer: Full backend engineering, serverless architecture, core algorithms, AI tools, security, curation, and all admin systems.
-- Pratham Pandey (bbethical010@gmail.com / GitHub: bbethical010-glitch)
+- Pratham Pandey (GitHub: bbethical010-glitch)
   Lead Frontend Developer & Original Ideator: Founding concept, APK, web platform (memecapsule.wtf), app theme, typography, UI/UX, Java Android bridge, MediaStore integrations, client build setup.
-- Faraz Ahmed (thesplashsnize@gmail.com)
+- Faraz Ahmed
   Social Media & Marketing Lead: Social handles, content planning, niche analysis, scripting, quality control, and marketing campaigns.
 Official App Email (User Support & Marketing): support@memecapsule.wtf
 Social Media:

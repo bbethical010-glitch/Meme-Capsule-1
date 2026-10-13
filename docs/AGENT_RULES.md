@@ -21,7 +21,7 @@ The following core architectural assets and components are protected. AI agents 
 
 ### A. Established Architecture & Infrastructure
 - **Cloudflare Pages Functions (`functions/api/`)**: The serverless API architecture using Cloudflare bindings (`env.DB` for D1 and `env.BUCKET` for R2). Do not replace this with Express, Next.js, or external servers.
-- **Cloudflare D1 Database (`d1/migrations/`)**: Existing migration files (`000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`) are historical database artifacts representing 13 production migrations. Never modify or delete past migration files. Add new migration files incrementally.
+- **Cloudflare D1 Database (`d1/migrations/`)**: Existing migration files (`000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`) are historical database artifacts representing 14 production migrations. Never modify or delete past migration files. Add new migration files incrementally.
 - **R2 Storage Integration**: The media bucket binding (`env.BUCKET`) and public asset URL resolution (`env.R2_PUBLIC_URL`).
 - **Cloudflare Configuration**: `wrangler.toml`, `.dev.vars`, and environment bindings.
 
