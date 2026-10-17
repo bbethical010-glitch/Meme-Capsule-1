@@ -12,6 +12,7 @@
 4. **No Placeholders or Fake Code**: Every change must be functional, tested, and complete. Never leave `// TODO`, mock data replacements, or half-implemented features.
 5. **The Repository is the Source of Truth**: Treat workspace files, existing migrations, and markdown documentation as the persistent project memory. Never guess when information can be verified in the codebase.
 6. **Mandatory Documentation Synchronization**: Documentation is never optional. Every agent MUST update all affected Markdown documents in `docs/` and the workspace after every change, feature addition, or refactor. Never mark a task complete without keeping documentation fully synchronized.
+7. **Mandatory Remote Git Coordination & Sync**: Before planning or implementing any feature, agents must check remote git state (`git fetch origin`, inspect `origin/main` / PRs) to ensure their branch is up to date and that teammates haven't already implemented or merged the feature. Never write code or propose architectures on a stale branch without verifying recent remote activity.
 
 ---
 
@@ -49,28 +50,32 @@ Every AI coding agent must adhere to this step-by-step workflow:
 ```text
 1. READ AGENT_RULES.md
    ↓
-2. INSPECT WORKSPACE & DOCUMENTATION (GEMINI.md, docs/, schema)
+2. SYNC WITH REMOTE & INSPECT GIT STATE (git fetch origin, check origin/main)
    ↓
-3. PLAN CHANGE & IDENTIFY RELEVANT FILES ONLY
+3. INSPECT WORKSPACE & DOCUMENTATION (GEMINI.md, docs/, schema)
    ↓
-4. IMPLEMENT FOCUSED CHANGES (Follow existing patterns & styles)
+4. PLAN CHANGE & IDENTIFY RELEVANT FILES ONLY
    ↓
-5. TEST THOROUGHLY (npm run build, runtime validation)
+5. IMPLEMENT FOCUSED CHANGES (Follow existing patterns & styles)
    ↓
-6. "DON'T STOP AT THE FIRST ERROR" (Diagnose root causes, rerun tests)
+6. TEST THOROUGHLY (npm run build, runtime validation)
    ↓
-7. UPDATE RELEVANT DOCUMENTATION (README, docs, walkthrough)
+7. "DON'T STOP AT THE FIRST ERROR" (Diagnose root causes, rerun tests)
    ↓
-8. PRE-COMMIT CHECKLIST
+8. UPDATE RELEVANT DOCUMENTATION (README, docs, walkthrough)
    ↓
-9. ATOMIC GIT COMMIT & PUSH
+9. PRE-COMMIT CHECKLIST
+   ↓
+10. ATOMIC GIT COMMIT & PUSH
 ```
 
 ### Before Changing Code:
 1. Read `AGENT_RULES.md` completely.
-2. Read project context in `GEMINI.md`, `CLAUDE.md`, and `docs/`.
-3. Check git status to ensure working on a clean tree.
-4. Locate existing utilities, middleware, and shared types before creating new ones.
+2. **Synchronize with Remote Repository**: Run `git fetch origin` and check for recent commits or PRs on `origin/main` (`git log HEAD..origin/main --oneline`). If the branch is behind, rebase or merge `origin/main` before designing or implementing changes.
+3. **Verify Feature Non-Duplication**: Confirm that colleagues haven't already implemented, reviewed, or auto-merged the requested feature or a counterpart. Check commit messages, PRs, and schema migrations. If an overlap exists, notify the user and coordinate immediately instead of writing duplicate code that leads to painful merge conflicts.
+4. Read project context in `GEMINI.md`, `CLAUDE.md`, and `docs/`.
+5. Check git status to ensure working on a clean tree.
+6. Locate existing utilities, middleware, and shared types before creating new ones.
 
 ### During Implementation:
 - Keep changes minimal and surgically focused on the task.
@@ -125,6 +130,7 @@ If a test, build, or command fails:
 ## 7. Pre-Commit Checklist
 
 Before committing and pushing to git, confirm:
+- [ ] Did I verify against `origin/main` that no remote commits conflict with or duplicate my changes?
 - [ ] Did I implement exactly what was requested without touching unrelated features?
 - [ ] Are existing working features (Public app, Admin, Curator, Reports, API) unaffected?
 - [ ] Did `npm run build` pass with 0 errors?

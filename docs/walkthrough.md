@@ -118,7 +118,16 @@ For non-meme uploads (e.g., random photos, corrupt images, spam):
 
 ### 6.3 AI & Curator Classification
 - Multimodal AI vision pre-judge (`functions/api/ai-judge/classify.ts`) and Python/NIM sync (`functions/api/admin/ai-categorise.ts`) detect NSFW/adult content and set `is_nsfw = 1, nsfw_flagged_by = 'ai-judge'`.
-- Curator toggle on `/curate` (`functions/api/curate/nsfw.ts` & `src/curate/CurateApp.tsx`) allows instant non-destructive NSFW tagging.
+- Curator toggle on `/curate` (via `POST /api/curate/save` with `moderation_only: true` and `src/curate/CurateApp.tsx`) allows instant non-destructive NSFW tagging, fully compliant with Cloudflare Pages publication.
 - Admin dashboard (`/admin`) features an NSFW filter tab and cyber-pink badge.
 - Reports moderation (`/reports`) allows non-destructive "Mark NSFW" resolution.
+
+---
+
+## 7. Multi-Branch Alignment & Remote Synchronization
+
+- Merged `origin/main` (incorporating PR #26, PR #27, and PR #28 by Pratham Pandey) into `feature/majority-consensus-curation`.
+- Unified D1 migration `013_add_nsfw_flag.sql` and schema `d1/schema.sql` to support both `is_nsfw CHECK (is_nsfw IN (0, 1))` and metadata `nsfw_flagged_by`.
+- Unified `src/curate/curateApi.ts` and `src/curate/CurateApp.tsx` to handle NSFW toggling through `POST /api/curate/save` (`moderation_only`) to ensure Cloudflare Pages function publication safety while preserving UI responsiveness and state updates.
+- Added permanent operating guidelines to `docs/AGENT_RULES.md` and `docs/AGENTS.md` enforcing remote branch synchronization (`git fetch origin`, inspect `origin/main`) before any feature planning to eliminate duplicate feature implementations and branch drift.
 
