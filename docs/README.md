@@ -53,7 +53,7 @@ Meme Capsule operates across three decoupled codebases:
 - **Curation & Categorization Engine (`/curate`, `/categorise`)**:
   - Multi-judge consensus system with token authentication (`cat_users`).
   - Layer 0 editorial keyboard shortcuts (`K` keep, `E` exclude, `D` duplicate, `L` review later).
-  - Single-judge adoption & authoritative finality (`POST /api/curate/approve`) bypassing SuperAdmin arbitration.
+  - Three-human majority consensus (`POST /api/curate/approve`) with blind independent votes, 2:1/3:0 finalization, and SuperAdmin arbitration for unresolved splits.
   - Permanent Force Remove hotkeys (`Shift+Delete` instant purge, `Shift+X` modal with reason) purging D1 metadata, R2 objects, and logging to `meme_force_removals`.
   - Multi-topic taxonomy tagging, tone labeling, and humour mechanism tagging.
   - Superadmin resolution dashboard for arbitrating conflicting judge votes.

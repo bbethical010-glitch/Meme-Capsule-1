@@ -554,15 +554,16 @@ To prevent mixing rejected memes with uncurated backlog items, Migration 012 int
    - `rarity` (TEXT): Drop rarity (`Common`, `Rare`, `Epic`, `Legendary`).
    - `status` (TEXT): Lifecycle state (`active`, `archived`, `draft`).
    - `is_active` (INTEGER): Public delivery flag (1 = active, 0 = inactive).
-   - `curation_status` (TEXT DEFAULT NULL): Explicit editorial status (`keep`, `excluded`, `duplicate`, `review_later`, or `NULL` for uncurated backlog). Added in Migration 012.
+   - `curation_status` (TEXT DEFAULT NULL): Editorial outcome (`keep`, `excluded`, `duplicate`, `review_later`, or `NULL` while pending). Added in Migration 012.
+   - `duplicate_of` (TEXT), `topics` (TEXT JSON), `tone` (TEXT), and `humour_mechanisms` (TEXT JSON): Resolved curation fields added in Migration 014.
    - `is_nsfw` (INTEGER NOT NULL DEFAULT 0): 18+ content flag added in Migration 013 (`013_add_nsfw_flag.sql`). Gated on public delivery routes (`is_nsfw = 0` by default; requested via `?nsfw=1`). Indexed via `idx_memes_is_nsfw`.
    - `nsfw_flagged_by` (TEXT): Origin of NSFW flag (`'ai-judge'`, `'curator'`, `'report'`, or `NULL`). Added in Migration 013.
    - `random_key` (REAL): Indexed random selection helper (`abs(random()) / 9223372036854775807.0`).
    - `likes_count`, `shown_count`, `share_count` (INTEGER).
-2. **`meme_curation` (Judge Consensus Votes):**
-   - `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `meme_id` (TEXT), `curator_id` (TEXT), `corpus_status` (TEXT: `keep`, `excluded`, `duplicate`, `review_later`), `topics` (TEXT JSON), `tone` (TEXT), `humour_mechanisms` (TEXT JSON), `curator_note` (TEXT), `created_at` (DATETIME).
+2. **`meme_curation` (Independent Judge Votes):**
+   - Stores up to three independent human rows, one per `(meme_id, user_id)`, with `corpus_status`, `duplicate_of`, `topics`, `tone`, `humour_mechanisms`, `curator_note`, and timestamps. AI Judge 4/5 rows remain separate from human vote counts.
 3. **`meme_curation_final` (SuperAdmin Authoritative Resolutions):**
-   - `meme_id` (TEXT PRIMARY KEY), `corpus_status` (TEXT: `keep` or `excluded`), `resolved_by` (TEXT), `resolved_at` (DATETIME). Currently holds **111 keep** and **53 excluded** decisions (164 total).
+   - Stores only authoritative `keep` and `excluded` outcomes. Duplicate and review_later outcomes are carried by `memes.curation_status`. It retains existing historical resolutions.
 4. **`cat_users` (Curator Accounts):**
    - `username` (TEXT PRIMARY KEY), `password_hash` (SHA-256), `role` (`judge` or `superadmin`), `is_active` (INTEGER).
 5. **`meme_reports` (Content Moderation Queue):**
@@ -583,7 +584,10 @@ Designed for rapid, high-volume evaluation. Curators (Judges 1, 2, 3) review mem
 - **State A (AI Consensus):** When AI Judge 4 and AI Judge 5 agree (both Keep or both Exclude), the human judge can press `Space` or `Enter` to fast-approve the consensus in a single stroke. If taxonomy details differ, pressing `4` adopts Judge 4, pressing `5` adopts Judge 5, or `Space/Enter` adopts Judge 4 by default.
 - **State B (AI Disagreement):** When AI Judge 4 and AI Judge 5 reach conflicting conclusions, both decisions are displayed side-by-side with hotkeys: `4` (Adopt Judge 4), `5` (Adopt Judge 5), or `O` (Manual Override).
 - **Single AI Ready:** When only one AI has completed evaluation, human judges can press `Space` or `Enter` to instantly adopt the available evaluation without roadblock.
-- **Authoritative Single-Judge Finality (`POST /api/curate/approve`):** Any single human judge adoption or manual approval is authoritative and immediately final: it writes to `meme_curation`, writes to `meme_curation_final`, and synchronizes `memes` (`is_active`, `status`, `curation_status`, `tags`, `category`) in an atomic transaction. Memes do not require SuperAdmin arbitration.
+- **Three-Human Majority Finalization (`POST /api/curate/approve`):** Each human judge writes only their own vote. A meme remains in the queue for other judges until they vote; no other human vote is returned to regular judges. Finalization occurs after all three votes.
+- **Layer 0 outcomes:** Keep and excluded finalize on 2:1 or 3:0 majorities. Duplicate finalizes only when its target converges. Review_later moves to its secondary queue. A 1:1:1 split or unresolved duplicate target routes to SuperAdmin. Only unanimous 3:0 excluded triggers hard Force Remove; 2:1 excluded is soft-archived.
+- **Secondary-field consensus:** Topics and humour mechanisms are voted per taxonomy option, requiring 2 of 3 votes, capped at 3 and 2 with canonical-order tie breaks. Tone uses its 2-of-3 majority. If a field has no majority, use AI Judge 4's value, consistent with the existing AI tie-break.
+- **Resolved fields:** Migration 014 adds `duplicate_of`, `topics`, `tone`, and `humour_mechanisms` to `memes`. `meme_curation_final` stores keep/excluded only; duplicate and review_later remain directly on `memes`. Kept memes preserve `tags = JSON.stringify(topics)` and `category = topics[0]`.
 - **Force Remove (`Shift+Delete` / `POST /api/curate/force-remove`):** For non-meme / invalid media in the corpus, pressing `Shift+Delete` or clicking `FORCE REMOVE` permanently vanishes the file from R2 media storage and purges all records across D1 tables (`memes`, `meme_curation`, `meme_curation_final`, `ai_curation_predictions`, etc.). This destructive action is non-undoable.
 - **Layer 0 Keyboard Curation (Override Mode `[O]`):**
   - `K`: **Keep** (Approved for public delivery).
@@ -600,11 +604,12 @@ Designed for rapid, high-volume evaluation. Curators (Judges 1, 2, 3) review mem
 
 
 ### 5.5 SuperAdmin Arbitration & Authoritative Active Synchronization
-When judges diverge in their votes, the meme surfaces in the **SuperAdmin Command Center**:
-- **Authoritative Keep (`corpus_status = 'keep'`)**: Automatically activates the meme in `memes` (`status = 'active'`, `is_active = 1`, `curation_status = 'keep'`), registering it in the live public spawn pool (111 memes).
-- **Authoritative Excluded (`corpus_status = 'excluded'`)**: Sets the meme to `status = 'archived'`, `is_active = 0`, and `curation_status = 'excluded'`, permanently isolating it from public drops while preserving it for audit (53 memes).
+The SuperAdmin Command Center unresolved filter contains only complete three-human-vote arbitration cases: 1:1:1 Layer 0 splits or duplicate target divergence. Fewer than three votes remain in the human queues.
+- **Keep:** Writes `meme_curation_final` with `corpus_status='keep'`, activates `memes`, and preserves resolved fields plus the existing tags/category mapping.
+- **Excluded:** Writes `meme_curation_final` with `corpus_status='excluded'` and soft-archives the meme. Only unanimous 3:0 human exclusion calls the existing hard Force Remove path; a 2:1 excluded vote never hard-deletes.
+- **Duplicate / Review Later:** Does not write `meme_curation_final`; stores outcome, duplicate target, and resolved fields directly on `memes`.
 - **SuperAdmin KPI Metrics**: The Superadmin dashboard displays `111 ACTIVE / 5111 (164 RESOLVED)` with a dedicated badge for `53 EXCL`.
-- **Public Spawn Gating**: The public delivery APIs (`/api/random-meme`, `/api/daily-meme`) strictly require an inner join on `meme_curation_final` with `corpus_status = 'keep'`, ensuring unfinalized or excluded memes can never enter user capsule drops.
+- **Public Spawn Gating**: The public delivery APIs continue to require an inner join on `meme_curation_final` with `corpus_status = 'keep'`, ensuring only keep decisions can enter user capsule drops. Unfinalized, excluded, duplicate, and review_later memes remain excluded.
 
 ### 5.6 Admin Console, 5-Metric Status Bar & SQL Runner (`/admin`)
 Token-protected control center (`ADMIN_API_TOKEN`):

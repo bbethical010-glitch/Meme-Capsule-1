@@ -151,7 +151,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     await ensureAIPredictionTable(env.DB);
 
     const sessionUser = await validateSession(request, env);
-    const userId = sessionUser?.id || "judge1";
+    const userId = sessionUser?.id || "user-judge1";
 
     const url = new URL(request.url);
     const filter = url.searchParams.get("filter") || "unreviewed";
@@ -190,15 +190,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     let whereClause = "WHERE m.id NOT IN (SELECT meme_id FROM meme_force_removals)";
 
     if (filter === "unreviewed") {
-      whereClause += " AND c.corpus_status IS NULL AND mcf.corpus_status IS NULL";
+      whereClause += " AND c.corpus_status IS NULL AND mcf.corpus_status IS NULL AND m.curation_status IS NULL";
     } else if (filter === "review_later") {
-      whereClause += " AND (c.corpus_status = 'review_later' OR mcf.corpus_status = 'review_later')";
+      whereClause += " AND (m.curation_status = 'review_later' OR c.corpus_status = 'review_later' OR mcf.corpus_status = 'review_later')";
     } else if (filter === "keep") {
-      whereClause += " AND (c.corpus_status = 'keep' OR mcf.corpus_status = 'keep')";
+      whereClause += " AND (m.curation_status = 'keep' OR c.corpus_status = 'keep' OR mcf.corpus_status = 'keep')";
     } else if (filter === "excluded") {
-      whereClause += " AND (c.corpus_status = 'excluded' OR mcf.corpus_status = 'excluded')";
+      whereClause += " AND (m.curation_status = 'excluded' OR c.corpus_status = 'excluded' OR mcf.corpus_status = 'excluded')";
     } else if (filter === "duplicate") {
-      whereClause += " AND (c.corpus_status = 'duplicate' OR mcf.corpus_status = 'duplicate')";
+      whereClause += " AND (m.curation_status = 'duplicate' OR c.corpus_status = 'duplicate' OR mcf.corpus_status = 'duplicate')";
     }
 
     let targetMeme: MemeRow | null = null;

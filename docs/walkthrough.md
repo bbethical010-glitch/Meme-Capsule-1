@@ -1,9 +1,9 @@
 # AI-Judgement Review Workflow Walkthrough
 
-This document outlines the final, production-verified AI-Judgement Review Workflow for human judges within the Meme Capsule `/curate` dashboard.
+This document outlines the AI-Judgement Review Workflow and the three-human majority-consensus curation flow for `/curate`.
 
 ## Overview
-The `/curate` dashboard deeply integrates pre-evaluations from offline AI models (`user-judge4` and `user-judge5`) directly into the human curation flow. Rather than manually curating all 5,000+ memes from scratch or waiting for multiple human consensus passes, human judges (Judges 1, 2, and 3) review AI evaluations, adopt high-confidence recommendations with single keystrokes, and have **immediate final authority** to publish memes live to the public app or exclude them permanently.
+The `/curate` dashboard integrates pre-evaluations from offline AI models (`user-judge4` and `user-judge5`) into each human judge's independent review. Human judges 1-3 review the AI evaluations, but their own votes are not final by themselves. The three human votes determine the consensus outcome.
 
 ---
 
@@ -38,17 +38,18 @@ The `/curate` dashboard deeply integrates pre-evaluations from offline AI models
 
 ---
 
-## 2. Immediate Finality: Single-Judge Adoption (`POST /api/curate/approve`)
+## 2. Three-Human Majority Consensus (`POST /api/curate/approve`)
 
-In previous iterations, conflicting judge decisions had to be routed to a separate SuperAdmin Command Center for arbitration. Under this new workflow:
-1. **Adoption = Final:** When ANY human judge (Judge 1, 2, or 3) adopts an AI judgement or submits manual curation, the decision is authoritative and final.
-2. **Atomic Edge Transaction:**
-   - Writes to `meme_curation` under that judge's `user_id` and `user_name` for audit logs.
-   - Writes directly to `meme_curation_final` with `resolved_by = "{Judge Name} [Adopted: {Source}]"`.
-   - Directly updates `memes` table (`is_active = 1` for keep, `0` for excluded; `status = 'active'` for keep, `'archived'` for excluded; `curation_status`, `tags`, `category`).
-3. **Queue Deduplication:** As soon as any human judge finalizes a meme, it automatically exits the `unreviewed` queue for all judges and increments the project-wide reviewed counter.
+Each human judge submits one independent vote for a meme. Judges 1-3 do not see each other's votes in the regular `/curate` response. A meme remains in a judge's unreviewed queue until that judge votes, even if other judges have already voted.
 
----
+- With fewer than three human votes, only the submitting judge's `meme_curation` row is written. No final decision is written to `meme_curation_final` or `memes`.
+- Once all three human judges vote, Layer 0 resolves by majority. Keep and excluded accept 2:1 or 3:0 outcomes; 2:1 excluded is a soft archive.
+- Duplicate resolves only when the applicable majority agrees on the same `duplicate_of` target. A 1:1:1 status split or unresolved duplicate target is sent to SuperAdmin arbitration.
+- Review_later is stored directly in `memes.curation_status` and remains in the secondary queue.
+- Only unanimous 3:0 excluded triggers the existing Force Remove path, deleting the R2 object and related D1 rows. This is non-undoable and emits a `[force-remove]` log entry.
+- `meme_curation_final` is written only for keep/excluded. Resolved topics, tone, humour mechanisms, and duplicate target are stored directly on `memes` after additive Migration 014. Existing `tags` and `category` mapping remains `tags = JSON.stringify(topics)` and `category = topics[0]` for kept memes.
+
+The AI review UI and hotkeys remain unchanged: States A/B/C still display AI Judge 4/5 context, and the existing `Enter`/`4`/`5`/`O` flow is used to form each judge's own vote.
 
 ## 3. Destructive Action: FORCE REMOVE (`Shift+Delete` / `POST /api/curate/force-remove`)
 
@@ -94,12 +95,11 @@ For non-meme uploads (e.g., random photos, corrupt images, spam):
 ---
 
 ## 5. Verification & Testing
-- **TypeScript & Vite Build:** Verified with `npm run build` (0 errors, 1,633 modules transformed).
-- **Backend API Routes:**
-  - `POST /api/curate/approve` (Atomic batch transaction on D1)
-  - `POST /api/curate/force-remove` (R2 delete + multi-table D1 cleanup)
-  - `GET /api/curate/next` (Filters finalized memes out of unreviewed queues)
-- **UI/UX:** Neo-brutalist styling maintained with Anton & Oswald typography, zero layout shifts, and responsive split columns.
+- **TypeScript & Vite Build:** Verified on October 17, 2026 with `npm run build` (0 errors, 1,634 modules transformed).
+- **Consensus resolver tests:** Verified with `node --experimental-strip-types --test tests/curationConsensus.test.mjs` (9 passing tests covering pending votes, keep/excluded outcomes, arbitration, duplicate targets, review_later, AI fallback, and taxonomy ordering).
+- **API integration:** Wrangler rejected `pages dev --config <custom-path>` because Pages requires its standard root configuration. Retrying with the root config started Pages against an isolated D1, but endpoint smoke requests were blocked because the local database bootstrap did not create `meme_curation`. No production/remote resources were used, and end-to-end API behavior remains unverified.
+- **Routes updated:** `POST /api/curate/approve`, `POST /api/curate/force-remove`, `GET /api/curate/next`, and SuperAdmin arbitration query/resolve endpoints.
+- **Migration rationale:** Migration 014 adds persisted resolved Layer 1-3 and duplicate-target fields to `memes`; those fields were absent from the existing schema, so the consensus result otherwise could not be persisted as required.
 
 ---
 

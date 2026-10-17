@@ -2,7 +2,7 @@
 
 ## Current Storage
 
-The project has fully migrated from Supabase to Cloudflare R2 + D1 as its production edge database and storage layer (with 15 production D1 migrations applied from `000_complete_setup.sql` through `013_add_nsfw_flag.sql`).
+The project uses Cloudflare R2 + D1 as its production edge database and storage layer. The repository now includes migration `014_add_resolved_curation_fields.sql`; apply it to each D1 environment before deploying code that uses the new curation columns.
 
 Current storage layers:
 
@@ -73,7 +73,9 @@ Core fields:
 - `rights_note`: `original`, `licensed`, `permission`, or `reviewed`.
 - `share_text`: text used by share actions.
 - `random_key`: indexed random selection helper (REAL type).
-- `curation_status`: `keep`, `excluded`, `duplicate`, `review_later`, or `NULL`. Added in Migration 012 to partition non-active memes into authoritatively rejected (`excluded`) vs uncurated backlog (`NULL`).
+- `curation_status`: `keep`, `excluded`, `duplicate`, `review_later`, or `NULL`. Added in Migration 012 and now records final majority outcomes.
+- `duplicate_of`: majority-resolved duplicate target. Added in Migration 014.
+- `topics`, `tone`, `humour_mechanisms`: resolved secondary curation fields stored on finalized memes. Added in Migration 014; `tags` and `category` retain their existing topic mapping.
 - `is_nsfw`: 18+ content flag (`INTEGER NOT NULL DEFAULT 0`). Added in Migration 013 (`013_add_nsfw_flag.sql`). Gated on public delivery routes (`is_nsfw = 0` by default; requested via `?nsfw=1`).
 - `nsfw_flagged_by`: Flag source (`'ai-judge'`, `'curator'`, `'report'`, or `NULL`). Added in Migration 013.
 - Index: `idx_memes_is_nsfw` on `memes(is_nsfw)`.
@@ -184,28 +186,18 @@ Public routes (`/api/random-meme`, `/api/daily-meme`, `/api/memes/random`) never
 
 ## Authoritative Resolution & Active Pool Synchronization
 
-The platform enforces a canonical single-source-of-truth contract across `memes` and `meme_curation_final`:
-1. **`meme_curation_final` Table**:
-   - `corpus_status = 'keep'`: Memes approved by Superadmin for the public Capsule (111 memes).
-   - `corpus_status = 'excluded'`: Memes rejected / discarded by Superadmin (53 memes).
-   - Total Editorial Decisions: 164.
-2. **`memes` Table (3-Way Partitioning via `curation_status`)**:
-   - **Active Public Capsule** (`status = 'active'`, `is_active = 1`, `curation_status = 'keep'`): Strictly maps 1-to-1 with authoritative keep decisions (111 memes).
-   - **Superadmin Excluded** (`status = 'archived'`, `is_active = 0`, `curation_status = 'excluded'`): Strictly isolated rejected memes (53 memes). Ineligible for public spawn.
-   - **Uncurated Backlog** (`status = 'archived'`, `is_active = 0`, `curation_status IS NULL`): Memes awaiting curator / judge review (4,947 memes).
-   - Total Corpus: 5,111 memes ($111 + 53 + 4,947 = 5,111$).
-3. **Dashboard & UI Synchronization**:
-   - Superadmin Command Center reports **111 Authoritative Resolved** memes with a dedicated badge for **53 Excluded**.
-   - `/admin` top stats bar displays **Total (5,111)**, **Active (111)**, **Excluded (53)**, **Archived (4,947)**, and **Drafts (0)**.
-   - Filtering by `[EXCLUDED]` in `/admin` renders the 53 rejected items with bright red `EXCLUDED` badges, distinct from general backlog items.
-4. **Single-Judge Adoption & Force Remove Workflows**:
-   - **`POST /api/curate/approve`**: Any human judge (Judge 1, 2, or 3) adopting an AI decision or finalizing a curation writes atomically to both `meme_curation` (audit log) and `meme_curation_final` (authoritative decision), automatically updating `memes` (`is_active`, `status`, `curation_status`, `tags`, `category`) without needing SuperAdmin arbitration.
-   - **`POST /api/curate/force-remove` (`Shift+Delete`)**: Allows curators to permanently vanish non-meme / invalid media from the R2 storage bucket and all D1 tables (`memes`, `meme_curation`, `meme_curation_final`, `ai_curation_predictions`) in a single non-undoable operation.
-5. **Migrations**:
-   - **Migration 011 (`011_force_removals.sql`)**: Created `meme_force_removals` audit table and indexes (`idx_force_removals_removed_at`, `idx_force_removals_removed_by`, `idx_force_removals_meme_id`) to track permanent purging of non-meme content from R2 and D1.
-   - **Migration 011 (`011_reconcile_active_and_curation_sync.sql`)**: Eliminated drift by enforcing $\text{status} = \text{'active'} \iff \text{is\_active} = 1$.
-   - **Migration 012 (`012_add_curation_status_to_memes.sql`)**: Added `curation_status` column to `memes`, backfilling `'keep'` (111) and `'excluded'` (53) from `meme_curation_final` while leaving uncurated backlog items as `NULL`. Automatically maintained on all future superadmin single and bulk resolutions.
-   - **Migration 013 (`013_add_nsfw_flag.sql`)**: Added `is_nsfw` (`INTEGER NOT NULL DEFAULT 0`) and `nsfw_flagged_by` (`TEXT`) columns to `memes` along with `idx_memes_is_nsfw` index for persistent 18+ content moderation and client-controlled delivery gating.
+Human Layer 0 curation is a three-judge majority workflow. Judges 1-3 each have one independent `meme_curation` row per meme. The queue excludes only the current judge's own vote and finalized/arbitration cases, and the regular judge response never exposes another human's vote.
+
+- Fewer than three human votes: retain only the per-judge vote. Do not write `meme_curation_final` or finalize `memes`.
+- 3:0 or 2:1 keep: write `meme_curation_final` as `keep`, set `memes.curation_status='keep'`, `status='active'`, `is_active=1`, and preserve `tags=JSON.stringify(topics)` plus `category=topics[0]` when topics exist.
+- 3:0 or 2:1 excluded: write `meme_curation_final` as `excluded` and soft-archive. Only unanimous 3:0 excluded uses the existing Force Remove path for the R2 object and related D1 rows.
+- Duplicate: set `memes.curation_status='duplicate'`, `duplicate_of`, and archive. A majority pair must agree on the target. Any target split under unanimous duplicate status routes to arbitration.
+- Review later: set `memes.curation_status='review_later'` and archive into the secondary queue.
+- 1:1:1 Layer 0 splits and unresolved duplicate targets remain without a final row and surface in the SuperAdmin arbitration queue.
+
+`meme_curation_final` is limited to `keep` and `excluded`; duplicate and review_later outcomes plus resolved topics/tone/mechanisms are stored directly on `memes`. The additive Migration 014 adds `duplicate_of`, `topics`, `tone`, and `humour_mechanisms`. Historical migrations are unchanged. Apply migration 014 before deploying the updated Pages Functions.
+
+Public routes (`/api/random-meme`, `/api/daily-meme`, `/api/memes/random`) continue to require `status='active'`, `is_active=1`, and a `meme_curation_final` row with `corpus_status='keep'`. Duplicate, review_later, excluded, unfinalized, and NSFW-filtered content remains ineligible for public delivery.
 
 ## Google Drive Workflow
 
