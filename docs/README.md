@@ -38,6 +38,7 @@ Meme Capsule operates across three decoupled codebases:
 - [`MEME_CAPSULE_KNOWLEDGE.md`](./MEME_CAPSULE_KNOWLEDGE.md) — Master product & technical specification, core product FAQs, and multi-codebase architecture.
 - [`PRIVACY_COOKIES_AND_DATA_FLOWS.md`](./PRIVACY_COOKIES_AND_DATA_FLOWS.md) — Exhaustive audit of website cookies, Formspree contact form, GA4 telemetry, AdMob integration, and Google Play Data Safety declarations.
 - [`DATABASE.md`](./DATABASE.md) — Cloudflare D1 SQLite database schemas, 14 migrations, and R2 media bucket architecture.
+- [`majority-consensus-curation-walkthrough.md`](./majority-consensus-curation-walkthrough.md) — detailed walkthrough of the three-judge consensus implementation, architecture diagrams, changed-file inventory, and acceptance evidence.
 - [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) — Detailed directory mapping, route mappings, and component hierarchy.
 - [`README_ANALYTICS.md`](./README_ANALYTICS.md) — Analytics tracking SDK, ingestion API, and worker aggregation pipeline.
 - [`report.md`](./report.md) — Google Lighthouse audit analysis, Core Web Vitals, accessibility, and backend caching remediation report.
