@@ -170,6 +170,10 @@ The feature implementation commit (`01dfcb8`) changed or added the following 16 
 
 No mobile APK or promo-website repository files were changed. The regular AI review presentation and its hotkey flow were outside this backend scope.
 
+### Follow-up documentation files
+
+The walkthrough itself was added after the feature implementation, and `docs/README.md` was updated to link to it from the documentation index. These two documentation-only follow-up files are not included in the 16-file feature-implementation inventory above.
+
 ### Verification-only artifacts
 
 The full HTTP acceptance exercise used temporary local-only items: a separate Wrangler config, a seeded isolated local D1 fixture, a PowerShell acceptance script, an SVG test object, and a temporary Pages Function to inspect R2 object existence. These were removed after verification and are **not** part of the committed implementation. They were not production resources. The permanent resolver unit test remains in `tests/curationConsensus.test.mjs`.
@@ -199,6 +203,8 @@ Verification was completed on October 17, 2026:
 | Votes are blind and queues are per judge | `GET /api/curate/next?filter=unreviewed` authenticated as Judge 2 after Judge 1 had voted, and as Judge 1 after their vote | Judge 2 received the meme and AI4/AI5 context but no Judge 1 name, ID, or curation; Judge 1's own queue returned no such item. |
 | Only unanimous excluded hard-removes; 2:1 excluded is soft archive | Approval endpoint followed by isolated D1 queries and a local R2 object-existence probe | 3:0 response was `hard_removed`; meme and vote row counts were both zero and seeded object no longer existed. The 2:1 excluded row remained in D1 with `curation_status='excluded'` and `is_active=0`. |
 | Duplicate/review_later use the compatible storage contract | Direct queries after duplicate and review_later outcomes | Agreed duplicate target and review_later status appeared on `memes`; neither status appeared in `meme_curation_final`. |
+| Existing `tags`/`category` taxonomy contract is preserved | Read-only isolated D1 query on `matrix-secondary-majority` after the real approval request | `topics` and `tags` both equaled `["Everyday Life","Work / Education","Relationships"]`; `category` was `Everyday Life`; SQL check returned `PASS`. |
+| Schema change is additive and existing migrations remain untouched | `git show --name-status 01dfcb8` compared with `d1/migrations/014_add_resolved_curation_fields.sql` | Feature commit added migration 014 and updated baseline `d1/schema.sql`; no pre-existing migration file was modified. The migration only adds the four resolved metadata columns. |
 | Existing adjacent public workflows remain usable | `PATCH /api/curate/nsfw`, `GET /api/random-meme` with and without `nsfw=1`, `POST /api/report`, and page requests to `/admin`, `/reports`, `/curate` | NSFW flag succeeded; default random delivery excluded the NSFW fixture and opt-in admitted it; report was accepted and persisted; all three pages returned HTTP 200. |
 | Build and isolated decision rules remain valid | Resolver test command and production `npm run build` | 9/9 unit tests passed; TypeScript and Vite build succeeded (1,634 modules transformed). |
 
@@ -211,5 +217,7 @@ Verification was completed on October 17, 2026:
 - `01dfcb8` — `feat: replace single-judge finality with majority consensus`
 - `bcb42b9` — `docs: record majority consensus API smoke results`
 - `f8836e6` — `docs: record consensus acceptance verification`
+- `712e136` — `docs: add majority consensus implementation walkthrough`
+- `66e5d7a` — `docs: add consensus acceptance traceability`
 
 This document is a follow-up guide to those implementation commits. It does not add new runtime behavior.
