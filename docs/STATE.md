@@ -6,7 +6,7 @@ architecture: Cloudflare Pages + Functions + D1 (SQLite) + R2 Media CDN
 deployed_url: https://meme-capsule-eww.pages.dev
 mobile_companion_app: com.meme.capsule (v3.3 / versionCode 24) on Google Play
 web_companion_platform: https://memecapsule.wtf
-updated: 2026-09-28
+updated: 2026-10-13
 ---
 
 # Project State: Meme Capsule (Serverless Edge Backend & Curation Engine)
@@ -57,12 +57,13 @@ The legacy prototype landing UI (`src/App.tsx`, `src/styles.css`) has been perma
   - `/api/curate/super/*`: SuperAdmin conflict resolution, bulk resolution, and summary stats.
 - **Categorization & Force Removal APIs (`functions/api/cat/`)**:
   - `/api/cat/decide`, `/api/cat/next`, `/api/cat/login`, `/api/cat/logout`, `/api/cat/me`: Taxonomy tagging operations.
-  - `/api/cat/force-remove`: Irreversible purge deactivating D1, logging `meme_force_removals` audit row, and physically deleting media from R2 bucket. See [FORCE_REMOVE_FEATURE.md](file:///Users/prathampandey/Desktop/ai-categoriser/Meme-Capsule/docs/FORCE_REMOVE_FEATURE.md).
+  - `/api/cat/force-remove`: Irreversible purge deactivating D1, logging `meme_force_removals` audit row, and physically deleting media from R2 bucket. See [FORCE_REMOVE_FEATURE.md](file:///c:/Users/avspn/Desktop/projects/meme%20application/docs/FORCE_REMOVE_FEATURE.md).
+  - `/api/cat/admin/force-removals`: Superadmin audit viewer for inspecting all force-removed media, judge attribution, and R2 deletion status.
 - **AI Pre-Curator APIs (`functions/api/ai-judge/`)**:
   - `/api/ai-judge/classify`, `/api/ai-judge/run/start`, `/api/ai-judge/run/stop`, `/api/ai-judge/run/progress`: Autonomous multimodal evaluation loop.
 
 ### B. Cloudflare D1 Database & Migrations (`d1/migrations/`)
-The database `meme-capsule-db` (SQLite at the edge) operates under 13 sequential migrations:
+The database `meme-capsule-db` (SQLite at the edge) operates under 14 sequential migrations:
 1. `000_complete_setup.sql`: Core schema initialization.
 2. `002_analytics.sql`: Event tracking, interactions, and ranking tables.
 3. `003_categorisation.sql`: Multi-judge accounts and editorial taxonomy.
@@ -74,15 +75,16 @@ The database `meme-capsule-db` (SQLite at the edge) operates under 13 sequential
 9. `008_optimize_curation_indexes.sql`: High-performance composite indexes.
 10. `009_add_api_password_to_users.sql`: SHA-256 hashed API passwords for judge sessions.
 11. `010_enforce_superadmin_active_and_cleanup_judges.sql`: Session cleanup and active role enforcement.
-12. `011_reconcile_active_and_curation_sync.sql`: Synchronization of active counts between Admin and Curation portals.
-13. `012_add_curation_status_to_memes.sql`: 3-tier partitioning architecture introducing `curation_status` (`active`, `excluded`, `backlog`).
+12. `011_force_removals.sql`: Audit table `meme_force_removals` and indexes for irreversible media purges.
+13. `011_reconcile_active_and_curation_sync.sql`: Synchronization of active counts between Admin and Curation portals.
+14. `012_add_curation_status_to_memes.sql`: 3-tier partitioning architecture introducing `curation_status` (`active`, `excluded`, `backlog`).
 
 ### C. Cloudflare R2 Media Storage
 - Bucket `memes` configured with public access enabled.
 - Zero egress fees for high-volume WebP image and MP4/GIF delivery.
 - Media synchronization engine in `/admin` ensuring D1 metadata matches physical R2 storage objects.
 
-- **`/curate`**: Multi-judge consensus curation dashboard with keyboard shortcuts (`K`, `X`, `D`, `R`), fast-approval of AI Consensus (`Space`/`Enter`), instant single-AI adoption, authoritative single-judge finality (`POST /api/curate/approve`), destructive Force Remove (`Shift+Delete` / `POST /api/curate/force-remove`), Superadmin dashboard view with force removal audit, judge account management, judge-isolated AI presets, and CSV/JSON export. Deeply integrates the **AI-Judgement Review Workflow** with AI Judges 4 and 5.
+- **`/curate`**: Multi-judge consensus curation dashboard with keyboard shortcuts (`K`, `X`, `D`, `R`), fast-approval of AI Consensus (`Space`/`Enter`), instant single-AI adoption, three-human majority finalization (`POST /api/curate/approve`) with arbitration on unresolved outcomes, destructive Force Remove (`Shift+Delete` / `POST /api/curate/force-remove`), Superadmin dashboard view with force removal audit, judge account management, judge-isolated AI presets, and CSV/JSON export. Deeply integrates the **AI-Judgement Review Workflow** with AI Judges 4 and 5.
 - **`/admin`**: Administration console with D1 SQL console, R2 media sync, 5-metric status bar, CSV/Excel export, analytics algorithm tuning, and dark mode.
 - **`/categorise`**: Multi-topic taxonomy tagging, tone labeling, and humor mechanism tagging.
 - **`/ai-judge`**: Multimodal AI pre-curator loop powered by NVIDIA NIM Llama 3.2 Vision and universal vision models.
@@ -93,9 +95,10 @@ The database `meme-capsule-db` (SQLite at the edge) operates under 13 sequential
 ## 3. Active Cross-Codebase Synchronization
 
 The single source of truth across all 3 codebases lives in `docs/MEME_CAPSULE_KNOWLEDGE.md`, synchronized through `editorav010-dev/meme-capsule-sync`.
-- **Fetch Script**: `powershell -File fetch-knowledge.ps1` (or `./fetch-knowledge.sh` on macOS/Linux).
-- **Update Script**: `powershell -File update-knowledge.ps1` (or `./update-knowledge.sh` on macOS/Linux).
+- **Fetch Script**: `powershell -ExecutionPolicy Bypass -File .knowledge/fetch-knowledge.ps1` (or `bash .knowledge/fetch-knowledge.sh` on macOS/Linux).
+- **Update Script**: `powershell -ExecutionPolicy Bypass -File .knowledge/update-knowledge.ps1` (or `bash .knowledge/update-knowledge.sh` on macOS/Linux).
 - Local sync metadata is tracked in `.knowledge/.knowledge_meta.json`.
+- All sync scripts and metadata are cleanly organized in `.knowledge/`.
 
 ---
 

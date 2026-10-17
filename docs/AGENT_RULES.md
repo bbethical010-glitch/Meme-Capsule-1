@@ -12,6 +12,7 @@
 4. **No Placeholders or Fake Code**: Every change must be functional, tested, and complete. Never leave `// TODO`, mock data replacements, or half-implemented features.
 5. **The Repository is the Source of Truth**: Treat workspace files, existing migrations, and markdown documentation as the persistent project memory. Never guess when information can be verified in the codebase.
 6. **Mandatory Documentation Synchronization**: Documentation is never optional. Every agent MUST update all affected Markdown documents in `docs/` and the workspace after every change, feature addition, or refactor. Never mark a task complete without keeping documentation fully synchronized.
+7. **Mandatory Remote Git Coordination & Sync**: Before planning or implementing any feature, agents must check remote git state (`git fetch origin`, inspect `origin/main` / PRs) to ensure their branch is up to date and that teammates haven't already implemented or merged the feature. Never write code or propose architectures on a stale branch without verifying recent remote activity.
 
 ---
 
@@ -21,7 +22,7 @@ The following core architectural assets and components are protected. AI agents 
 
 ### A. Established Architecture & Infrastructure
 - **Cloudflare Pages Functions (`functions/api/`)**: The serverless API architecture using Cloudflare bindings (`env.DB` for D1 and `env.BUCKET` for R2). Do not replace this with Express, Next.js, or external servers.
-- **Cloudflare D1 Database (`d1/migrations/`)**: Existing migration files (`000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`) are historical database artifacts representing 13 production migrations. Never modify or delete past migration files. Add new migration files incrementally.
+- **Cloudflare D1 Database (`d1/migrations/`)**: Existing migration files (`000_complete_setup.sql` through `012_add_curation_status_to_memes.sql`) are historical database artifacts representing 14 production migrations. Never modify or delete past migration files. Add new migration files incrementally.
 - **R2 Storage Integration**: The media bucket binding (`env.BUCKET`) and public asset URL resolution (`env.R2_PUBLIC_URL`).
 - **Cloudflare Configuration**: `wrangler.toml`, `.dev.vars`, and environment bindings.
 
@@ -49,28 +50,32 @@ Every AI coding agent must adhere to this step-by-step workflow:
 ```text
 1. READ AGENT_RULES.md
    ↓
-2. INSPECT WORKSPACE & DOCUMENTATION (GEMINI.md, docs/, schema)
+2. SYNC WITH REMOTE & INSPECT GIT STATE (git fetch origin, check origin/main)
    ↓
-3. PLAN CHANGE & IDENTIFY RELEVANT FILES ONLY
+3. INSPECT WORKSPACE & DOCUMENTATION (GEMINI.md, docs/, schema)
    ↓
-4. IMPLEMENT FOCUSED CHANGES (Follow existing patterns & styles)
+4. PLAN CHANGE & IDENTIFY RELEVANT FILES ONLY
    ↓
-5. TEST THOROUGHLY (npm run build, runtime validation)
+5. IMPLEMENT FOCUSED CHANGES (Follow existing patterns & styles)
    ↓
-6. "DON'T STOP AT THE FIRST ERROR" (Diagnose root causes, rerun tests)
+6. TEST THOROUGHLY (npm run build, runtime validation)
    ↓
-7. UPDATE RELEVANT DOCUMENTATION (README, docs, walkthrough)
+7. "DON'T STOP AT THE FIRST ERROR" (Diagnose root causes, rerun tests)
    ↓
-8. PRE-COMMIT CHECKLIST
+8. UPDATE RELEVANT DOCUMENTATION (README, docs, walkthrough)
    ↓
-9. ATOMIC GIT COMMIT & PUSH
+9. PRE-COMMIT CHECKLIST
+   ↓
+10. ATOMIC GIT COMMIT & PUSH
 ```
 
 ### Before Changing Code:
 1. Read `AGENT_RULES.md` completely.
-2. Read project context in `GEMINI.md`, `CLAUDE.md`, and `docs/`.
-3. Check git status to ensure working on a clean tree.
-4. Locate existing utilities, middleware, and shared types before creating new ones.
+2. **Synchronize with Remote Repository**: Run `git fetch origin` and check for recent commits or PRs on `origin/main` (`git log HEAD..origin/main --oneline`). If the branch is behind, rebase or merge `origin/main` before designing or implementing changes.
+3. **Verify Feature Non-Duplication**: Confirm that colleagues haven't already implemented, reviewed, or auto-merged the requested feature or a counterpart. Check commit messages, PRs, and schema migrations. If an overlap exists, notify the user and coordinate immediately instead of writing duplicate code that leads to painful merge conflicts.
+4. Read project context in `GEMINI.md`, `CLAUDE.md`, and `docs/`.
+5. Check git status to ensure working on a clean tree.
+6. Locate existing utilities, middleware, and shared types before creating new ones.
 
 ### During Implementation:
 - Keep changes minimal and surgically focused on the task.
@@ -125,6 +130,7 @@ If a test, build, or command fails:
 ## 7. Pre-Commit Checklist
 
 Before committing and pushing to git, confirm:
+- [ ] Did I verify against `origin/main` that no remote commits conflict with or duplicate my changes?
 - [ ] Did I implement exactly what was requested without touching unrelated features?
 - [ ] Are existing working features (Public app, Admin, Curator, Reports, API) unaffected?
 - [ ] Did `npm run build` pass with 0 errors?
@@ -149,17 +155,17 @@ It is NOT part of this repository — it syncs via a separate GitHub repository 
 
 **BEFORE starting any task:**
 1. Always fetch the latest version first:
-   - Windows: `powershell -File fetch-knowledge.ps1`
-   - Mac/Linux: `./fetch-knowledge.sh`
+   - Windows: `powershell -ExecutionPolicy Bypass -File .knowledge/fetch-knowledge.ps1`
+   - Mac/Linux: `bash .knowledge/fetch-knowledge.sh`
 2. Read `docs/MEME_CAPSULE_KNOWLEDGE.md` fully before writing any code or changing configuration.
 
 **AFTER any meaningful change:**
 (new feature, architecture decision, bug fix, workflow change, new dependency, table migration):
 1. Update `docs/MEME_CAPSULE_KNOWLEDGE.md` with the new relevant notes.
 2. Push the updated knowledge file back to the shared repository:
-   - Windows: `powershell -File update-knowledge.ps1`
-   - Mac/Linux: `./update-knowledge.sh`
-3. If a **CONFLICT** is reported — stop, run `fetch-knowledge.ps1` fresh, manually merge your new notes into the fresh file, then run `update-knowledge.ps1` again. Never force-push or skip the fetch before pushing.
+   - Windows: `powershell -ExecutionPolicy Bypass -File .knowledge/update-knowledge.ps1`
+   - Mac/Linux: `bash .knowledge/update-knowledge.sh`
+3. If a **CONFLICT** is reported — stop, run `.knowledge/fetch-knowledge.ps1` (or `bash .knowledge/fetch-knowledge.sh`) fresh, manually merge your new notes into the fresh file, then run the update script again. Never force-push or skip the fetch before pushing.
 
 ---
 

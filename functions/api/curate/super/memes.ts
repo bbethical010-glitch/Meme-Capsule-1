@@ -14,6 +14,11 @@ interface MemeRow {
   title: string | null;
   image_url: string | null;
   storage_path: string | null;
+  curation_status: string | null;
+  duplicate_of: string | null;
+  topics: string | null;
+  tone: string | null;
+  humour_mechanisms: string | null;
   final_status: string | null;
   final_duplicate_of: string | null;
   final_topics: string | null;
@@ -65,9 +70,34 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     if (filter === "resolved") {
-      baseQuery += " AND f.corpus_status IS NOT NULL";
+      baseQuery += " AND COALESCE(f.corpus_status, m.curation_status) IS NOT NULL";
     } else if (filter === "unresolved") {
-      baseQuery += " AND f.corpus_status IS NULL";
+      baseQuery += `
+        AND COALESCE(f.corpus_status, m.curation_status) IS NULL
+        AND (
+          SELECT COUNT(DISTINCT c.user_id)
+          FROM meme_curation c JOIN cat_users u ON u.id = c.user_id
+          WHERE c.meme_id = m.id AND u.username IN ('judge1', 'judge2', 'judge3')
+        ) = 3
+        AND (
+          (
+            SELECT COUNT(DISTINCT c.corpus_status)
+            FROM meme_curation c JOIN cat_users u ON u.id = c.user_id
+            WHERE c.meme_id = m.id AND u.username IN ('judge1', 'judge2', 'judge3')
+          ) = 3
+          OR (
+            (SELECT COUNT(*) FROM meme_curation c JOIN cat_users u ON u.id = c.user_id
+             WHERE c.meme_id = m.id AND u.username IN ('judge1', 'judge2', 'judge3') AND c.corpus_status = 'duplicate') >= 2
+            AND (
+              (SELECT COUNT(DISTINCT c.duplicate_of) FROM meme_curation c JOIN cat_users u ON u.id = c.user_id
+               WHERE c.meme_id = m.id AND u.username IN ('judge1', 'judge2', 'judge3') AND c.corpus_status = 'duplicate') <> 1
+              OR EXISTS (SELECT 1 FROM meme_curation c JOIN cat_users u ON u.id = c.user_id
+                         WHERE c.meme_id = m.id AND u.username IN ('judge1', 'judge2', 'judge3')
+                           AND c.corpus_status = 'duplicate' AND c.duplicate_of IS NULL)
+            )
+          )
+        )
+      `;
     }
 
     // Get total count
@@ -81,16 +111,21 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const query = `
       SELECT 
         m.id, m.title, m.image_url, m.storage_path,
-        f.corpus_status as final_status,
-        f.duplicate_of as final_duplicate_of,
-        f.topics as final_topics,
-        f.tone as final_tone,
-        f.humour_mechanisms as final_mechanisms,
+        m.curation_status,
+        m.duplicate_of,
+        m.topics,
+        m.tone,
+        m.humour_mechanisms,
+        COALESCE(f.corpus_status, m.curation_status) as final_status,
+        COALESCE(f.duplicate_of, m.duplicate_of) as final_duplicate_of,
+        COALESCE(f.topics, m.topics) as final_topics,
+        COALESCE(f.tone, m.tone) as final_tone,
+        COALESCE(f.humour_mechanisms, m.humour_mechanisms) as final_mechanisms,
         f.curator_note as final_note,
         f.resolved_at
       ${baseQuery}
       ORDER BY 
-        CASE WHEN f.corpus_status IS NULL THEN 0 ELSE 1 END ASC,
+        CASE WHEN COALESCE(f.corpus_status, m.curation_status) IS NULL THEN 0 ELSE 1 END ASC,
         m.uploaded_at ASC
       LIMIT ? OFFSET ?
     `;
@@ -108,11 +143,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       const placeholders = memeIds.map(() => "?").join(",");
       const { results: reviewResults } = await env.DB.prepare(`
         SELECT 
-          meme_id, user_id, user_name, corpus_status, duplicate_of,
-          topics, tone, humour_mechanisms, curator_note, reviewed_at
-        FROM meme_curation
-        WHERE meme_id IN (${placeholders})
-          AND user_name NOT IN ('AI Judge', 'Judge')
+          c.meme_id, c.user_id, c.user_name, c.corpus_status, c.duplicate_of,
+          c.topics, c.tone, c.humour_mechanisms, c.curator_note, c.reviewed_at
+        FROM meme_curation c
+        JOIN cat_users u ON u.id = c.user_id
+        WHERE c.meme_id IN (${placeholders})
+          AND u.username IN ('judge1', 'judge2', 'judge3')
         ORDER BY reviewed_at ASC
       `).bind(...memeIds).all<JudgeReviewRow>();
       reviews = reviewResults || [];
@@ -134,16 +170,28 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       let consensusStatus = "unreviewed";
       if (m.final_status) {
         consensusStatus = "resolved";
-      } else if (memeReviews.length === 1) {
-        consensusStatus = "single_review";
+      } else if (memeReviews.length < 3) {
+        consensusStatus = memeReviews.length === 0 ? "unreviewed" : "pending_reviews";
       } else if (memeReviews.length > 1) {
         const first = memeReviews[0].corpus_status;
         const allSame = memeReviews.every((r) => r.corpus_status === first);
         if (allSame) {
-          consensusStatus = first === "keep" ? "unanimous_keep" : "unanimous_exclude";
+          if (first === "keep") consensusStatus = "unanimous_keep";
+          else if (first === "excluded") consensusStatus = "unanimous_exclude";
+          else if (first === "duplicate") consensusStatus = "unanimous_duplicate";
+          else if (first === "review_later") consensusStatus = "unanimous_review_later";
+          else consensusStatus = "unreviewed";
         } else {
           consensusStatus = "conflict";
         }
+      }
+      const duplicateReviews = memeReviews.filter((review) => review.corpus_status === "duplicate");
+      if (
+        duplicateReviews.length >= 2 &&
+        (duplicateReviews.some((review) => !review.duplicate_of?.trim()) ||
+          new Set(duplicateReviews.map((review) => review.duplicate_of?.trim() || null)).size > 1)
+      ) {
+        consensusStatus = "conflict";
       }
 
       let parsedFinalTopics: string[] = [];

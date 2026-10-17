@@ -7,7 +7,7 @@ import {
   type CorpusStatus,
   type CuratorUser
 } from "./curateTypes";
-import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme, setMemeNsfw } from "./curateApi";
+import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme, updateMemeNsfw, setMemeNsfw } from "./curateApi";
 import EditorialButtons from "./EditorialButtons";
 import CategorizationPanel from "./CategorizationPanel";
 import CurationStatsModal from "./CurationStatsModal";
@@ -82,6 +82,7 @@ export default function CurateApp() {
   const [forceRemoveLoading, setForceRemoveLoading] = useState<boolean>(false);
   const [nsfwLoading, setNsfwLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "warning" | "error" } | null>(null);
+  const isNsfw = Boolean(currentMeme?.is_nsfw);
 
   useEffect(() => {
     if (!toast) return;
@@ -335,7 +336,7 @@ export default function CurateApp() {
       await setMemeNsfw(meme.id, nextValue);
       setCurrentMeme((current) =>
         current && current.id === meme.id
-          ? { ...current, is_nsfw: nextValue }
+          ? { ...current, is_nsfw: nextValue, nsfw_flagged_by: nextValue ? "curator" : null }
           : current
       );
       setToast({ message: nextValue ? "NSFW TAG ADDED" : "NSFW TAG REMOVED", type: "success" });
@@ -826,6 +827,39 @@ export default function CurateApp() {
                 <div style={{ fontSize: "14px", fontWeight: "bold", color: "#fff" }}>{currentMeme.title}</div>
               </div>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: isNsfw ? "rgba(221, 0, 97, 0.2)" : "#1e1e1e",
+                    border: `1px solid ${isNsfw ? "#dd0061" : "#444"}`,
+                    borderRadius: "3px",
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    userSelect: "none"
+                  }}
+                  title="Flag content as 18+ NSFW (client-gated, independent of exclude)"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isNsfw}
+                    onChange={() => handleToggleNsfw()}
+                    disabled={nsfwLoading}
+                    style={{ accentColor: "#dd0061", cursor: "pointer" }}
+                  />
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      fontFamily: "Oswald, sans-serif",
+                      color: isNsfw ? "#ff4d88" : "#aaa",
+                      letterSpacing: "0.5px"
+                    }}
+                  >
+                    🔞 NSFW {isNsfw ? "(18+)" : ""}
+                  </span>
+                </label>
                 <button
                   type="button"
                   onClick={() => setShowForceRemoveModal(true)}
