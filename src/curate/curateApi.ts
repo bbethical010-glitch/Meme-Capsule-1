@@ -63,6 +63,20 @@ export async function saveCuration(payload: {
   return handleResponse(res);
 }
 
+export async function setMemeNsfw(
+  memeId: string,
+  isNsfw: boolean
+): Promise<{ success: boolean; meme_id: string; is_nsfw: boolean | number; nsfw_flagged_by?: string | null }> {
+  const res = await fetch("/api/curate/save", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ meme_id: memeId, moderation_only: true, is_nsfw: isNsfw })
+  });
+  return handleResponse(res);
+}
+
+export const updateMemeNsfw = setMemeNsfw;
+
 export async function approveCuration(payload: {
   meme_id: string;
   corpus_status: CorpusStatus;
@@ -88,18 +102,6 @@ export async function forceRemoveMeme(memeId: string): Promise<{ success: boolea
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify({ meme_id: memeId })
-  });
-  return handleResponse(res);
-}
-
-export async function updateMemeNsfw(
-  memeId: string,
-  isNsfw: boolean
-): Promise<{ success: boolean; meme_id: string; is_nsfw: number; nsfw_flagged_by: string | null }> {
-  const res = await fetch("/api/curate/nsfw", {
-    method: "PATCH",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ meme_id: memeId, is_nsfw: isNsfw })
   });
   return handleResponse(res);
 }

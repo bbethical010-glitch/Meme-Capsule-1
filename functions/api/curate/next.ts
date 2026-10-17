@@ -26,7 +26,7 @@ interface MemeRow {
   title: string | null;
   image_url: string | null;
   storage_path: string | null;
-  is_nsfw?: number | null;
+  is_nsfw: number;
   nsfw_flagged_by?: string | null;
 
   corpus_status: string | null;

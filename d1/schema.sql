@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS memes (
   rights_note TEXT NOT NULL DEFAULT 'reviewed',
   share_text TEXT NOT NULL DEFAULT 'Spawned from Meme Capsule',
   random_key REAL NOT NULL DEFAULT (abs(random()) / 9223372036854775807.0),
-  is_nsfw INTEGER NOT NULL DEFAULT 0,
+  is_nsfw INTEGER NOT NULL DEFAULT 0 CHECK (is_nsfw IN (0, 1)),
   nsfw_flagged_by TEXT,
   CHECK (image_url IS NOT NULL OR storage_path IS NOT NULL)
 );

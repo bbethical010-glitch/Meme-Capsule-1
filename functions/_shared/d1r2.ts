@@ -25,6 +25,7 @@ export type D1MemeRow = {
   source_link: string | null;
   category: string | null;
   tags: string | null;
+  is_nsfw: number;
   rarity: string | null;
   status: string | null;
   curation_status?: string | null;

@@ -7,7 +7,7 @@ import {
   type CorpusStatus,
   type CuratorUser
 } from "./curateTypes";
-import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme, updateMemeNsfw } from "./curateApi";
+import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme, updateMemeNsfw, setMemeNsfw } from "./curateApi";
 import EditorialButtons from "./EditorialButtons";
 import CategorizationPanel from "./CategorizationPanel";
 import CurationStatsModal from "./CurationStatsModal";
@@ -80,35 +80,9 @@ export default function CurateApp() {
   const [showForceRemoveModal, setShowForceRemoveModal] = useState<boolean>(false);
   const [forceRemoveReason, setForceRemoveReason] = useState<string>("");
   const [forceRemoveLoading, setForceRemoveLoading] = useState<boolean>(false);
+  const [nsfwLoading, setNsfwLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "warning" | "error" } | null>(null);
-  const [isNsfw, setIsNsfw] = useState<boolean>(false);
-
-  useEffect(() => {
-    setIsNsfw(Boolean(currentMeme?.is_nsfw));
-  }, [currentMeme?.id, currentMeme?.is_nsfw]);
-
-  const handleToggleNsfw = async (checked: boolean) => {
-    if (!currentMeme) return;
-    setIsNsfw(checked);
-    try {
-      const res = await updateMemeNsfw(currentMeme.id, checked);
-      if (res.success) {
-        setCurrentMeme((prev) =>
-          prev ? { ...prev, is_nsfw: checked ? 1 : 0, nsfw_flagged_by: checked ? "curator" : null } : null
-        );
-        setToast({
-          message: checked ? "Meme flagged as NSFW [18+]" : "NSFW flag removed",
-          type: "success"
-        });
-      }
-    } catch (err: any) {
-      setIsNsfw(!checked);
-      setToast({
-        message: `Failed to update NSFW flag: ${err?.message || "Error"}`,
-        type: "error"
-      });
-    }
-  };
+  const isNsfw = Boolean(currentMeme?.is_nsfw);
 
   useEffect(() => {
     if (!toast) return;
@@ -351,6 +325,30 @@ export default function CurateApp() {
       stateRef.current.isSaving = false;
     }
   }, [loadMeme]);
+
+  const handleToggleNsfw = useCallback(async () => {
+    const meme = stateRef.current.currentMeme;
+    if (!meme || nsfwLoading) return;
+
+    const nextValue = !meme.is_nsfw;
+    setNsfwLoading(true);
+    try {
+      await setMemeNsfw(meme.id, nextValue);
+      setCurrentMeme((current) =>
+        current && current.id === meme.id
+          ? { ...current, is_nsfw: nextValue, nsfw_flagged_by: nextValue ? "curator" : null }
+          : current
+      );
+      setToast({ message: nextValue ? "NSFW TAG ADDED" : "NSFW TAG REMOVED", type: "success" });
+    } catch (err: unknown) {
+      setToast({
+        message: err instanceof Error ? err.message : "Failed to update NSFW tag",
+        type: "error"
+      });
+    } finally {
+      setNsfwLoading(false);
+    }
+  }, [nsfwLoading]);
 
   // Topic Toggle (Max 3)
   const handleToggleTopic = useCallback((topicId: string) => {
@@ -662,6 +660,27 @@ export default function CurateApp() {
 
           <button
             type="button"
+            onClick={handleToggleNsfw}
+            disabled={nsfwLoading}
+            style={{
+              background: currentMeme?.is_nsfw ? "#dd0061" : "#1c1b1b",
+              border: "2px solid #dd0061",
+              color: "#fff",
+              padding: "4px 10px",
+              fontSize: "11px",
+              fontFamily: "Oswald, sans-serif",
+              fontWeight: "bold",
+              cursor: nsfwLoading ? "not-allowed" : "pointer",
+              opacity: nsfwLoading ? 0.6 : 1,
+              boxShadow: nsfwLoading ? "none" : "2px 2px 0px #dd0061",
+              letterSpacing: "0.5px"
+            }}
+            title="Toggle NSFW moderation tag"
+          >
+            {nsfwLoading ? "SAVING..." : currentMeme?.is_nsfw ? "✓ NSFW TAGGED" : "⚠ TAG NSFW"}
+          </button>
+          <button
+            type="button"
             onClick={() => loadMeme(currentMeme?.id)}
             disabled={loading}
             style={{
@@ -825,7 +844,8 @@ export default function CurateApp() {
                   <input
                     type="checkbox"
                     checked={isNsfw}
-                    onChange={(e) => handleToggleNsfw(e.target.checked)}
+                    onChange={() => handleToggleNsfw()}
+                    disabled={nsfwLoading}
                     style={{ accentColor: "#dd0061", cursor: "pointer" }}
                   />
                   <span
