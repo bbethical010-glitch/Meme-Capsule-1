@@ -27,7 +27,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export async function fetchNextMeme(
   filter: string = "unreviewed",
   currentId?: string,
-  direction: "next" | "prev" = "next"
+  direction: "next" | "prev" = "next",
+  includeStats: boolean = false
 ): Promise<{
   meme: CurateMemeItem | null;
   stats: { total: number; reviewed: number; remaining: number; current_index: number };
@@ -36,6 +37,7 @@ export async function fetchNextMeme(
   if (filter) query.set("filter", filter);
   if (currentId) query.set("current_id", currentId);
   if (direction) query.set("direction", direction);
+  if (includeStats) query.set("include_stats", "true");
 
   const res = await fetch(`/api/curate/next?${query.toString()}`, {
     headers: getAuthHeaders(),

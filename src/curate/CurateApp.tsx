@@ -177,13 +177,19 @@ export default function CurateApp() {
     img.src = url;
   };
 
-  const loadMeme = useCallback(async (currentId?: string, direction: "next" | "prev" = "next"): Promise<CurateMemeItem | null> => {
+  const loadMeme = useCallback(async (
+    currentId?: string,
+    direction: "next" | "prev" = "next",
+    includeStats: boolean = false
+  ): Promise<CurateMemeItem | null> => {
     if (!token) return null;
     try {
       setLoading(true);
-      const res = await fetchNextMeme(filterQueue, currentId, direction);
+      const res = await fetchNextMeme(filterQueue, currentId, direction, includeStats);
       setCurrentMeme(res.meme);
-      setStats(res.stats);
+      if (res.stats) {
+        setStats(res.stats);
+      }
 
       if (res.meme) {
         preloadImage(res.meme.image_url);
@@ -225,9 +231,9 @@ export default function CurateApp() {
 
   useEffect(() => {
     if (token && viewMode === "judge") {
-      loadMeme();
+      loadMeme(undefined, "next", true);
     }
-  }, [token, viewMode, loadMeme]);
+  }, [token, viewMode, filterQueue, loadMeme]);
 
   // Approve current decision (atomic adoption or manual) and advance
   const handleApproveAndAdvance = useCallback(async (
@@ -283,6 +289,12 @@ export default function CurateApp() {
         user_name: user?.display_name,
         adopted_from: source
       });
+      // Optimistic local progress increment for seamless 0ms UI advancement
+      setStats((prev) => ({
+        ...prev,
+        reviewed: prev.reviewed + 1,
+        remaining: Math.max(0, prev.remaining - 1)
+      }));
     } catch (err) {
       console.error("Failed to approve curation decision:", err);
     } finally {
@@ -290,7 +302,7 @@ export default function CurateApp() {
       stateRef.current.isSaving = false;
     }
 
-    const nextMeme = await loadMeme(currentMemeId, "next");
+    const nextMeme = await loadMeme(currentMemeId, "next", false);
     return nextMeme;
   }, [user, loadMeme]);
 
@@ -314,7 +326,7 @@ export default function CurateApp() {
       setForceRemoveReason("");
       // Remove any items for this meme from undoStack since deletion is permanent
       setUndoStack((prev) => prev.filter((item) => item.meme.id !== memeId));
-      await loadMeme(memeId, "next");
+      await loadMeme(memeId, "next", true);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Force remove failed";
       console.error("Failed to force-remove meme:", err);
@@ -681,7 +693,7 @@ export default function CurateApp() {
           </button>
           <button
             type="button"
-            onClick={() => loadMeme(currentMeme?.id)}
+            onClick={() => loadMeme(currentMeme?.id, "next", true)}
             disabled={loading}
             style={{
               background: "#222",

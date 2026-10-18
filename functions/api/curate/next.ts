@@ -17,9 +17,15 @@ import { json, handleD1Error, type Env } from "../../_shared/d1r2";
 import { validateSession } from "../../_shared/catAuth";
 import { ensureAIPredictionTable, ensureCurationTables, ensureForceRemovalsTable } from "../../_shared/curateDb";
 
-// In-memory isolate cache for static total memes count (avoids scanning 5,000+ rows on every swipe)
-let totalMemesCache: { count: number; expiresAt: number } | null = null;
-const TOTAL_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
+// In-memory isolate cache for static total memes count and judge-specific reviewed counts
+// Avoids scanning 10,000+ rows on every single swipe
+interface StatsCache {
+  total: number;
+  reviewedByJudge: Map<string, number>;
+  expiresAt: number;
+}
+let statsCache: StatsCache | null = null;
+const STATS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes TTL
 
 interface MemeRow {
   id: string;
@@ -157,31 +163,56 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const filter = url.searchParams.get("filter") || "unreviewed";
     const currentId = url.searchParams.get("current_id") || "";
     const direction = url.searchParams.get("direction") || "next";
+    const includeStats = url.searchParams.get("include_stats") === "true";
     const publicBase = (env.R2_PUBLIC_URL || "").replace(/\/+$/, "");
 
     await ensureForceRemovalsTable(env.DB);
 
-    // 1. Overall counts for this judge across the entire corpus (excluding force-removed memes).
+    // 1. Overall counts for this judge across the entire corpus.
+    // Heavy COUNT(*) table scans are bypassed during continuous swiping (saving ~10,000 reads/swipe)
+    // and executed only on initial load, queue switch, cache expiry (10 min), or explicit include_stats=true.
     let total = 0;
-    try {
-      const totalCountRes = await env.DB.prepare(
-        "SELECT COUNT(*) as cnt FROM memes WHERE id NOT IN (SELECT meme_id FROM meme_force_removals)"
-      ).first<{ cnt: number }>();
-      total = totalCountRes?.cnt ?? 0;
-    } catch {
-      const totalCountRes = await env.DB.prepare(
-        "SELECT COUNT(*) as cnt FROM memes"
-      ).first<{ cnt: number }>();
-      total = totalCountRes?.cnt ?? 0;
+    let reviewed = 0;
+
+    const isCacheExpired = !statsCache || Date.now() > statsCache.expiresAt;
+    const isJudgeCached = Boolean(statsCache && statsCache.reviewedByJudge.has(userId));
+
+    if (includeStats || isCacheExpired || !isJudgeCached) {
+      try {
+        const totalCountRes = await env.DB.prepare(
+          "SELECT COUNT(1) as cnt FROM memes WHERE id NOT IN (SELECT meme_id FROM meme_force_removals)"
+        ).first<{ cnt: number }>();
+        total = totalCountRes?.cnt ?? 0;
+      } catch {
+        const totalCountRes = await env.DB.prepare(
+          "SELECT COUNT(1) as cnt FROM memes"
+        ).first<{ cnt: number }>();
+        total = totalCountRes?.cnt ?? 0;
+      }
+
+      const reviewedCountRes = await env.DB.prepare(`
+        SELECT COUNT(DISTINCT m.id) as cnt FROM memes m
+        WHERE EXISTS (SELECT 1 FROM meme_curation c WHERE c.meme_id = m.id AND c.user_id = ?)
+           OR EXISTS (SELECT 1 FROM meme_curation_final mcf WHERE mcf.meme_id = m.id)
+      `).bind(userId).first<{ cnt: number }>();
+
+      reviewed = reviewedCountRes?.cnt ?? 0;
+
+      if (!statsCache || isCacheExpired) {
+        statsCache = {
+          total,
+          reviewedByJudge: new Map([[userId, reviewed]]),
+          expiresAt: Date.now() + STATS_CACHE_TTL_MS
+        };
+      } else {
+        statsCache.total = total;
+        statsCache.reviewedByJudge.set(userId, reviewed);
+      }
+    } else if (statsCache) {
+      total = statsCache.total;
+      reviewed = statsCache.reviewedByJudge.get(userId) ?? 0;
     }
 
-    const reviewedCountRes = await env.DB.prepare(`
-      SELECT COUNT(DISTINCT m.id) as cnt FROM memes m
-      WHERE EXISTS (SELECT 1 FROM meme_curation c WHERE c.meme_id = m.id AND c.user_id = ?)
-         OR EXISTS (SELECT 1 FROM meme_curation_final mcf WHERE mcf.meme_id = m.id)
-    `).bind(userId).first<{ cnt: number }>();
-
-    const reviewed = reviewedCountRes?.cnt ?? 0;
     const remaining = Math.max(0, total - reviewed);
 
     // 2. Build the human-curation queue filter.
