@@ -59,7 +59,20 @@ export interface SuperMemeItem {
   id: string;
   title: string;
   image_url: string;
-  consensus_status: "unanimous_keep" | "unanimous_exclude" | "conflict" | "single_review" | "unreviewed" | "resolved";
+  consensus_status:
+    | "unanimous_keep"
+    | "unanimous_exclude"
+    | "unanimous_duplicate"
+    | "unanimous_review_later"
+    | "majority_keep"
+    | "majority_exclude"
+    | "majority_duplicate"
+    | "majority_review_later"
+    | "conflict"
+    | "single_review"
+    | "pending_reviews"
+    | "unreviewed"
+    | "resolved";
   judges_count: number;
   judges: {
     user_id: string;

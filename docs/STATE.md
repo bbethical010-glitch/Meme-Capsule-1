@@ -124,3 +124,18 @@ The single source of truth across all 3 codebases lives in `docs/MEME_CAPSULE_KN
 3. **Strict Human Consensus Separation**: Consensus metrics (conflicts, unanimous keep, unanimous exclude, arbitration queue) are strictly calculated among human judges (`judge1`, `judge2`, `judge3`). AI Judges (4 & 5) provide reference votes only and **NEVER push conflicts or trigger arbitration**.
 4. **Guaranteed Exclude & Force-Remove Auditing**: All 5 judges have their Exclude votes (`{j.excluded}`) and Force Remove purges (`{j.force_removed}`) counted and visibly displayed. Total Exclude Votes and Total Force Removals are added as top-level KPI cards. `hardRemoveMeme` writes immutable audit entries to `meme_force_removals`.
 5. **Zero-Tolerance Schema Drift Rule**: Inscribed into `AGENT_RULES.md`, `AGENTS.md`, and `MEME_CAPSULE_KNOWLEDGE.md`, prohibiting agents from querying unverified columns.
+
+---
+
+## 6. SuperAdmin Curation Logic & Live Auto-Refresh (October 2026)
+
+1. **2:1 Majority vs 1:1:1 Conflict Separation**:
+   - Fixed `functions/api/curate/super/memes.ts` to properly differentiate between 2:1 human majority votes (`majority_keep`, `majority_exclude`, `majority_duplicate`, `majority_review_later`) and true 1:1:1 splits.
+   - Updated SuperAdmin UI with dedicated badges: `2:1 MAJORITY KEEP` (blue `#007AFF`), `2:1 MAJORITY EXCLUDE` (orange `#FF9500`), and reserved `⚠️ 1:1:1 CONFLICT` (red `#FF453A`) only for genuine 3-way deadlocks.
+2. **Dedicated "FINAL EXCLUDED" KPI Metric**:
+   - Separated the `917 EXCL` badge out of the `ACTIVE RESOLVED` card into its own dedicated `FINAL EXCLUDED: {summary.resolved_excluded_count}` card.
+3. **GitHub Actions-Style Silent Auto-Refresh Control**:
+   - Implemented `AutoRefreshControl.tsx` matching GitHub Actions' workflow dropdown.
+   - Configurable intervals (`Every 10 seconds`, `Every 30 seconds`, `Every minute`, `Every 5 minutes`, `Off`, plus `🔄 Refresh now`).
+   - Integrated into both `/curate` SuperAdmin Command Center and `/admin` Administration Console.
+   - Performs silent background data fetching without reloading the browser tab or disrupting active input.

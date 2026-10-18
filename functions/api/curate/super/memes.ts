@@ -183,28 +183,48 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       let consensusStatus = "unreviewed";
       if (m.final_status) {
         consensusStatus = "resolved";
+      } else if (humanReviews.length === 0) {
+        consensusStatus = "unreviewed";
       } else if (humanReviews.length < 3) {
-        consensusStatus = humanReviews.length === 0 ? "unreviewed" : "pending_reviews";
-      } else if (humanReviews.length > 1) {
-        const first = humanReviews[0].corpus_status;
-        const allSame = humanReviews.every((r) => r.corpus_status === first);
-        if (allSame) {
-          if (first === "keep") consensusStatus = "unanimous_keep";
-          else if (first === "excluded") consensusStatus = "unanimous_exclude";
-          else if (first === "duplicate") consensusStatus = "unanimous_duplicate";
-          else if (first === "review_later") consensusStatus = "unanimous_review_later";
-          else consensusStatus = "unreviewed";
-        } else {
+        consensusStatus = "pending_reviews";
+      } else {
+        // All 3 human judges have submitted reviews
+        const statusCounts = new Map<string, number>();
+        for (const r of humanReviews) {
+          statusCounts.set(r.corpus_status, (statusCounts.get(r.corpus_status) || 0) + 1);
+        }
+
+        const keepCount = statusCounts.get("keep") || 0;
+        const excludeCount = statusCounts.get("excluded") || 0;
+        const dupCount = statusCounts.get("duplicate") || 0;
+        const laterCount = statusCounts.get("review_later") || 0;
+
+        // 1. Unanimous (3:0) agreements
+        if (keepCount === 3) {
+          consensusStatus = "unanimous_keep";
+        } else if (excludeCount === 3) {
+          consensusStatus = "unanimous_exclude";
+        } else if (dupCount === 3) {
+          const targets = new Set(humanReviews.filter((r) => r.corpus_status === "duplicate").map((r) => r.duplicate_of?.trim() || null));
+          consensusStatus = (targets.size === 1 && !targets.has(null)) ? "unanimous_duplicate" : "conflict";
+        } else if (laterCount === 3) {
+          consensusStatus = "unanimous_review_later";
+        }
+        // 2. Clear 2:1 Majorities (Majority wins!)
+        else if (keepCount === 2) {
+          consensusStatus = "majority_keep";
+        } else if (excludeCount === 2) {
+          consensusStatus = "majority_exclude";
+        } else if (dupCount === 2) {
+          const targets = new Set(humanReviews.filter((r) => r.corpus_status === "duplicate").map((r) => r.duplicate_of?.trim() || null));
+          consensusStatus = (targets.size === 1 && !targets.has(null)) ? "majority_duplicate" : "conflict";
+        } else if (laterCount === 2) {
+          consensusStatus = "majority_review_later";
+        }
+        // 3. True 1:1:1 Split (each judge voted differently)
+        else {
           consensusStatus = "conflict";
         }
-      }
-      const duplicateReviews = humanReviews.filter((review) => review.corpus_status === "duplicate");
-      if (
-        duplicateReviews.length >= 2 &&
-        (duplicateReviews.some((review) => !review.duplicate_of?.trim()) ||
-          new Set(duplicateReviews.map((review) => review.duplicate_of?.trim() || null)).size > 1)
-      ) {
-        consensusStatus = "conflict";
       }
 
       let parsedFinalTopics: string[] = [];
