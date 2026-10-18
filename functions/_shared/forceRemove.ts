@@ -4,17 +4,24 @@ interface MemeRow {
   id: string;
   storage_path: string | null;
   image_url: string | null;
+  title: string | null;
 }
 
 /** Shared implementation used by the manual and unanimous-consensus remove paths. */
-export async function hardRemoveMeme(env: Env, memeId: string, reason: string): Promise<void> {
+export async function hardRemoveMeme(
+  env: Env,
+  memeId: string,
+  reason: string,
+  removedBy: string = "system-consensus",
+  removedByName: string = "Consensus Engine"
+): Promise<void> {
   const memeRow = await env.DB.prepare(
-    "SELECT id, storage_path, image_url FROM memes WHERE id = ?",
+    "SELECT id, storage_path, image_url, title FROM memes WHERE id = ?",
   ).bind(memeId).first<MemeRow>();
 
   const bucket = env.MEMES_BUCKET || (env as any).R2_BUCKET;
+  const keysToDelete: string[] = [];
   if (bucket && memeRow) {
-    const keysToDelete: string[] = [];
     if (memeRow.storage_path) keysToDelete.push(memeRow.storage_path.replace(/^\/+/, ""));
     if (!memeRow.storage_path && memeRow.image_url) {
       try {
@@ -32,6 +39,26 @@ export async function hardRemoveMeme(env: Env, memeId: string, reason: string): 
         console.warn(`[force-remove] Could not delete R2 key ${key}:`, error);
       }
     }
+  }
+
+  // Record permanent audit log into meme_force_removals
+  try {
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO meme_force_removals 
+      (meme_id, title, image_url, storage_path, r2_key, removed_by, removed_by_name, reason, r2_deleted, r2_deleted_at, removed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    `).bind(
+      memeId,
+      memeRow?.title || null,
+      memeRow?.image_url || null,
+      memeRow?.storage_path || null,
+      keysToDelete[0] || null,
+      removedBy,
+      removedByName,
+      reason
+    ).run();
+  } catch (auditErr) {
+    console.warn(`[force-remove] Could not log audit row for ${memeId}:`, auditErr);
   }
 
   const tablesToClean = [
@@ -59,5 +86,5 @@ export async function hardRemoveMeme(env: Env, memeId: string, reason: string): 
     await env.DB.prepare("DELETE FROM memes WHERE id = ?").bind(memeId).run().catch(() => {});
   }
 
-  console.info("[force-remove] hard-purged meme", { meme_id: memeId, reason });
+  console.info("[force-remove] hard-purged meme", { meme_id: memeId, reason, removed_by: removedBy });
 }

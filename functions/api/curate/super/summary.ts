@@ -17,6 +17,7 @@ interface JudgeCountRow {
   excluded: number;
   duplicates: number;
   review_later: number;
+  force_removed?: number;
   last_active: string;
 }
 
@@ -71,27 +72,65 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       resolvedExcludedCount = 0;
     }
 
-    // 3. Per-judge progress breakdown (Active human judges only)
+    // 3. Per-judge progress breakdown (All 5 configured judges: 3 Human + 2 AI)
+    // Using LEFT JOIN on cat_users ensures every judge is represented even with 0 reviews
     const { results: judgeResults } = await env.DB.prepare(`
       SELECT 
-        user_id,
-        user_name,
-        COUNT(*) as total_reviewed,
-        SUM(CASE WHEN corpus_status = 'keep' THEN 1 ELSE 0 END) as kept,
-        SUM(CASE WHEN corpus_status = 'excluded' THEN 1 ELSE 0 END) as excluded,
-        SUM(CASE WHEN corpus_status = 'duplicate' THEN 1 ELSE 0 END) as duplicates,
-        SUM(CASE WHEN corpus_status = 'review_later' THEN 1 ELSE 0 END) as review_later,
-        MAX(reviewed_at) as last_active
-      FROM meme_curation c
-      JOIN cat_users u ON u.id = c.user_id
-      WHERE u.username IN ('judge1', 'judge2', 'judge3')
-      GROUP BY c.user_id, c.user_name
-      ORDER BY total_reviewed DESC
+        u.id as user_id,
+        u.display_name as user_name,
+        COUNT(c.id) as total_reviewed,
+        SUM(CASE WHEN c.corpus_status = 'keep' THEN 1 ELSE 0 END) as kept,
+        SUM(CASE WHEN c.corpus_status = 'excluded' THEN 1 ELSE 0 END) as excluded,
+        SUM(CASE WHEN c.corpus_status = 'duplicate' THEN 1 ELSE 0 END) as duplicates,
+        SUM(CASE WHEN c.corpus_status = 'review_later' THEN 1 ELSE 0 END) as review_later,
+        MAX(c.reviewed_at) as last_active
+      FROM cat_users u
+      LEFT JOIN meme_curation c ON c.user_id = u.id
+      WHERE u.username IN ('judge1', 'judge2', 'judge3', 'judge4', 'judge5')
+      GROUP BY u.id, u.display_name, u.username
+      ORDER BY 
+        CASE u.username
+          WHEN 'judge1' THEN 1
+          WHEN 'judge2' THEN 2
+          WHEN 'judge3' THEN 3
+          WHEN 'judge4' THEN 4
+          WHEN 'judge5' THEN 5
+          ELSE 6
+        END ASC
     `).all<JudgeCountRow>();
 
-    const judges = judgeResults || [];
+    // Query force-removals per judge if table exists
+    const { results: forceRemovedRows } = await env.DB.prepare(`
+      SELECT removed_by, COUNT(*) as cnt
+      FROM meme_force_removals
+      GROUP BY removed_by
+    `).all<{ removed_by: string; cnt: number }>().catch(() => ({ results: [] as { removed_by: string; cnt: number }[] }));
+    const forceRemovedMap = new Map((forceRemovedRows || []).map((r) => [r.removed_by, r.cnt]));
 
-    // 4. Consensus & disagreement analysis across multi-judge reviews (Human judges only)
+    // Query total force-removals across entire database
+    let totalForceRemoved = 0;
+    try {
+      const frRes = await env.DB.prepare("SELECT COUNT(*) as cnt FROM meme_force_removals").first<{ cnt: number }>();
+      totalForceRemoved = frRes?.cnt ?? 0;
+    } catch {
+      totalForceRemoved = 0;
+    }
+
+    const judges = (judgeResults || []).map((j) => ({
+      ...j,
+      total_reviewed: j.total_reviewed || 0,
+      kept: j.kept || 0,
+      excluded: j.excluded || 0,
+      duplicates: j.duplicates || 0,
+      review_later: j.review_later || 0,
+      force_removed: forceRemovedMap.get(j.user_id) || 0
+    }));
+
+    // Calculate total exclude votes across all judges
+    const totalExcludeVotes = judges.reduce((sum, j) => sum + (j.excluded || 0), 0);
+
+    // 4. Consensus & disagreement analysis across multi-judge reviews (Human judges ONLY)
+    // As per policy, AI Judges (4 & 5) provide reference context only and NEVER trigger consensus conflicts.
     const { results: allReviews } = await env.DB.prepare(`
       SELECT c.meme_id, c.user_id, c.corpus_status, c.duplicate_of
       FROM meme_curation c
@@ -148,6 +187,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       resolved_active_count: resolvedActiveCount,
       resolved_excluded_count: resolvedExcludedCount,
       total_resolved_count: totalResolvedCount,
+      total_force_removed: totalForceRemoved,
+      total_exclude_votes: totalExcludeVotes,
       percent_resolved: totalMemes > 0 ? Math.round((resolvedActiveCount / totalMemes) * 100) : 0,
       consensus_metrics: {
         unreviewed,

@@ -33,7 +33,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ error: "meme_id is required." }, { status: 400 });
     }
 
-    await hardRemoveMeme(env, memeId, `Manual Force Remove by ${sessionUser.display_name}`);
+    await hardRemoveMeme(
+      env,
+      memeId,
+      `Manual Force Remove by ${sessionUser.display_name}`,
+      sessionUser.id,
+      sessionUser.display_name
+    );
 
     return json({
       success: true,
