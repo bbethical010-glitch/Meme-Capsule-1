@@ -580,6 +580,13 @@ To prevent mixing rejected memes with uncurated backlog items, Migration 012 int
 ### 5.4 Multi-Judge Consensus, AI-Judgement Review & Layer 0 Keyboard Curation (`/curate`, `/categorise`)
 Designed for rapid, high-volume evaluation. Curators (Judges 1, 2, 3) review memes pre-evaluated by offline AI models (AI Judges 4 & 5):
 
+**Multi-Judge Architecture & Strict Role Boundaries:**
+- **Human Judges (Judges 1, 2, 3):** Authoritative consensus arbiters. Unanimous keep, unanimous exclude, duplicate convergence, and split/conflicts are governed **strictly and exclusively** by the three human judges.
+- **AI Judges (Judges 4 & 5):** Assistive pre-evaluators designed to boost human curation velocity. **AI judges NEVER push conflicts, arguments, or blockers onto the SuperAdmin console, nor trigger arbitration states.** Their votes serve as reference context and instant adoption options ("⚡ ADOPT DECISION") for human judges.
+- **Full 5-Judge Dashboard Visibility:** All 5 configured judges (Judges 1, 2, 3, 4, 5) are permanently displayed in the SuperAdmin live progress strip and comparison tables.
+- **Mandatory Exclude & Force-Remove Auditing:** Every judge's "Exclude" votes (`{j.excluded} Excl`) and "Force Remove" purges (`{j.force_removed} Purged`) are explicitly tallied and visibly rendered on the SuperAdmin dashboard. Every hard purge writes an immutable audit row to `meme_force_removals` prior to metadata/R2 deletion.
+- **Zero Schema Drift Enforcement:** Edge queries must never reference newly introduced migration columns without physically verifying that the live D1 database has the column (preventing 500 error queue collapses).
+
 **AI-Judgement Review Workflow for Human Judges (Judges 1, 2, 3):**
 - **State A (AI Consensus):** When AI Judge 4 and AI Judge 5 agree (both Keep or both Exclude), the human judge can press `Space` or `Enter` to fast-approve the consensus in a single stroke. If taxonomy details differ, pressing `4` adopts Judge 4, pressing `5` adopts Judge 5, or `Space/Enter` adopts Judge 4 by default.
 - **State B (AI Disagreement):** When AI Judge 4 and AI Judge 5 reach conflicting conclusions, both decisions are displayed side-by-side with hotkeys: `4` (Adopt Judge 4), `5` (Adopt Judge 5), or `O` (Manual Override).
@@ -588,7 +595,7 @@ Designed for rapid, high-volume evaluation. Curators (Judges 1, 2, 3) review mem
 - **Layer 0 outcomes:** Keep and excluded finalize on 2:1 or 3:0 majorities. Duplicate finalizes only when its target converges. Review_later moves to its secondary queue. A 1:1:1 split or unresolved duplicate target routes to SuperAdmin. Only unanimous 3:0 excluded triggers hard Force Remove; 2:1 excluded is soft-archived.
 - **Secondary-field consensus:** Topics and humour mechanisms are voted per taxonomy option, requiring 2 of 3 votes, capped at 3 and 2 with canonical-order tie breaks. Tone uses its 2-of-3 majority. If a field has no majority, use AI Judge 4's value, consistent with the existing AI tie-break.
 - **Resolved fields:** Migration 014 adds `duplicate_of`, `topics`, `tone`, and `humour_mechanisms` to `memes`. `meme_curation_final` stores keep/excluded only; duplicate and review_later remain directly on `memes`. Kept memes preserve `tags = JSON.stringify(topics)` and `category = topics[0]`.
-- **Force Remove (`Shift+Delete` / `POST /api/curate/force-remove`):** For non-meme / invalid media in the corpus, pressing `Shift+Delete` or clicking `FORCE REMOVE` permanently vanishes the file from R2 media storage and purges all records across D1 tables (`memes`, `meme_curation`, `meme_curation_final`, `ai_curation_predictions`, etc.). This destructive action is non-undoable.
+- **Force Remove (`Shift+Delete` / `POST /api/curate/force-remove`):** For non-meme / invalid media in the corpus, pressing `Shift+Delete` or clicking `FORCE REMOVE` permanently vanishes the file from R2 media storage, logs an immutable audit entry in `meme_force_removals`, and purges all records across D1 tables (`memes`, `meme_curation`, `meme_curation_final`, `ai_curation_predictions`, etc.). This destructive action is non-undoable.
 - **Layer 0 Keyboard Curation (Override Mode `[O]`):**
   - `K`: **Keep** (Approved for public delivery).
   - `X`: **Exclude** (Archived; hidden from public drops).
@@ -604,11 +611,12 @@ Designed for rapid, high-volume evaluation. Curators (Judges 1, 2, 3) review mem
 
 
 ### 5.5 SuperAdmin Arbitration & Authoritative Active Synchronization
-The SuperAdmin Command Center unresolved filter contains only complete three-human-vote arbitration cases: 1:1:1 Layer 0 splits or duplicate target divergence. Fewer than three votes remain in the human queues.
+The SuperAdmin Command Center unresolved filter contains only complete three-human-vote arbitration cases: 1:1:1 Layer 0 splits or duplicate target divergence among Judges 1, 2, and 3. AI judges never introduce conflicts.
 - **Keep:** Writes `meme_curation_final` with `corpus_status='keep'`, activates `memes`, and preserves resolved fields plus the existing tags/category mapping.
 - **Excluded:** Writes `meme_curation_final` with `corpus_status='excluded'` and soft-archives the meme. Only unanimous 3:0 human exclusion calls the existing hard Force Remove path; a 2:1 excluded vote never hard-deletes.
 - **Duplicate / Review Later:** Does not write `meme_curation_final`; stores outcome, duplicate target, and resolved fields directly on `memes`.
-- **SuperAdmin KPI Metrics**: The Superadmin dashboard displays `111 ACTIVE / 5111 (164 RESOLVED)` with a dedicated badge for `53 EXCL`.
+- **SuperAdmin KPI Metrics**: The Superadmin dashboard displays `ACTIVE RESOLVED`, `TOTAL EXCLUDE VOTES`, `FORCE REMOVED`, `HUMAN CONFLICTS`, `UNANIMOUS KEEP`, and `UNANIMOUS EXCLUDE`.
+- **Judges Progress Strip**: Displays live review stats for all 5 judges, showing total reviewed, kept, exclude votes, duplicates, review later, and force removals.
 - **Public Spawn Gating**: The public delivery APIs continue to require an inner join on `meme_curation_final` with `corpus_status = 'keep'`, ensuring only keep decisions can enter user capsule drops. Unfinalized, excluded, duplicate, and review_later memes remain excluded.
 
 ### 5.6 Admin Console, 5-Metric Status Bar & SQL Runner (`/admin`)

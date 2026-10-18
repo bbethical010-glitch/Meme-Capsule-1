@@ -31,22 +31,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const action = body.action || "unanimous_all";
     const now = new Date().toISOString();
 
-    // Find all memes reviewed by multiple judges where all reviews agree
+    // Find all memes reviewed by multiple human judges where all human reviews agree.
+    // AI judges (4 & 5) provide reference context only and NEVER drive automated resolution.
     const { results } = await env.DB.prepare(`
       SELECT 
-        meme_id,
-        MIN(corpus_status) as corpus_status,
-        MIN(topics) as topics,
-        MIN(tone) as tone,
-        MIN(humour_mechanisms) as humour_mechanisms,
-        MIN(duplicate_of) as duplicate_of,
-        MIN(curator_note) as curator_note,
-        COUNT(DISTINCT corpus_status) as status_variants,
+        c.meme_id,
+        MIN(c.corpus_status) as corpus_status,
+        MIN(c.topics) as topics,
+        MIN(c.tone) as tone,
+        MIN(c.humour_mechanisms) as humour_mechanisms,
+        MIN(c.duplicate_of) as duplicate_of,
+        MIN(c.curator_note) as curator_note,
+        COUNT(DISTINCT c.corpus_status) as status_variants,
         COUNT(*) as total_reviews
-      FROM meme_curation
-      WHERE meme_id NOT IN (SELECT meme_id FROM meme_curation_final)
-        AND user_name NOT IN ('AI Judge', 'Judge')
-      GROUP BY meme_id
+      FROM meme_curation c
+      JOIN cat_users u ON u.id = c.user_id
+      WHERE c.meme_id NOT IN (SELECT meme_id FROM meme_curation_final)
+        AND u.username IN ('judge1', 'judge2', 'judge3')
+      GROUP BY c.meme_id
       HAVING status_variants = 1 AND total_reviews >= 2
     `).all<UnanimousGroupRow & { status_variants: number; total_reviews: number }>();
 

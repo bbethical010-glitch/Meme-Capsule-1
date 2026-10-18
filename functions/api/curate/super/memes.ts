@@ -32,6 +32,7 @@ interface JudgeReviewRow {
   meme_id: string;
   user_id: string;
   user_name: string;
+  username?: string;
   corpus_status: string;
   duplicate_of: string | null;
   topics: string;
@@ -137,19 +138,28 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const memes = memeRows || [];
     const memeIds = memes.map((m) => m.id);
 
-    // Fetch all judge reviews for these memes (Human judges only)
+    // Fetch all judge reviews for these memes (Both Human and AI judges)
     let reviews: JudgeReviewRow[] = [];
     if (memeIds.length > 0) {
       const placeholders = memeIds.map(() => "?").join(",");
       const { results: reviewResults } = await env.DB.prepare(`
         SELECT 
           c.meme_id, c.user_id, c.user_name, c.corpus_status, c.duplicate_of,
-          c.topics, c.tone, c.humour_mechanisms, c.curator_note, c.reviewed_at
+          c.topics, c.tone, c.humour_mechanisms, c.curator_note, c.reviewed_at,
+          u.username
         FROM meme_curation c
         JOIN cat_users u ON u.id = c.user_id
         WHERE c.meme_id IN (${placeholders})
-          AND u.username IN ('judge1', 'judge2', 'judge3')
-        ORDER BY reviewed_at ASC
+          AND u.username IN ('judge1', 'judge2', 'judge3', 'judge4', 'judge5')
+        ORDER BY 
+          CASE u.username
+            WHEN 'judge1' THEN 1
+            WHEN 'judge2' THEN 2
+            WHEN 'judge3' THEN 3
+            WHEN 'judge4' THEN 4
+            WHEN 'judge5' THEN 5
+            ELSE 6
+          END ASC
       `).bind(...memeIds).all<JudgeReviewRow>();
       reviews = reviewResults || [];
     }
@@ -166,15 +176,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       const fullUrl = m.image_url || (m.storage_path && publicBase ? `${publicBase}/${m.storage_path.replace(/^\/+/, "")}` : "") || "";
       const memeReviews = reviewsByMeme.get(m.id) || [];
 
-      // Determine consensus state
+      // Determine consensus state STRICTLY from the 3 human judges.
+      // AI Judges (Judge 4 & 5) provide reference context only and NEVER push conflicts.
+      const humanReviews = memeReviews.filter((r) => ["judge1", "judge2", "judge3"].includes(r.username || ""));
+
       let consensusStatus = "unreviewed";
       if (m.final_status) {
         consensusStatus = "resolved";
-      } else if (memeReviews.length < 3) {
-        consensusStatus = memeReviews.length === 0 ? "unreviewed" : "pending_reviews";
-      } else if (memeReviews.length > 1) {
-        const first = memeReviews[0].corpus_status;
-        const allSame = memeReviews.every((r) => r.corpus_status === first);
+      } else if (humanReviews.length < 3) {
+        consensusStatus = humanReviews.length === 0 ? "unreviewed" : "pending_reviews";
+      } else if (humanReviews.length > 1) {
+        const first = humanReviews[0].corpus_status;
+        const allSame = humanReviews.every((r) => r.corpus_status === first);
         if (allSame) {
           if (first === "keep") consensusStatus = "unanimous_keep";
           else if (first === "excluded") consensusStatus = "unanimous_exclude";
@@ -185,7 +198,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           consensusStatus = "conflict";
         }
       }
-      const duplicateReviews = memeReviews.filter((review) => review.corpus_status === "duplicate");
+      const duplicateReviews = humanReviews.filter((review) => review.corpus_status === "duplicate");
       if (
         duplicateReviews.length >= 2 &&
         (duplicateReviews.some((review) => !review.duplicate_of?.trim()) ||

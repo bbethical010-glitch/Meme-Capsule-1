@@ -105,5 +105,22 @@ The single source of truth across all 3 codebases lives in `docs/MEME_CAPSULE_KN
 ## 4. Current Verification & Build Status
 
 - **Build Command**: `npm run build` (`tsc && vite build`).
-- **Build Output**: Passes with 0 errors (all 1632 modules bundled into `dist/`).
+- **Build Output**: Passes with 0 errors (all 1634 modules bundled into `dist/`).
+- **Consensus Test Suite**: `node --test tests/curationConsensus.test.mjs` (9/9 tests pass).
 - **Production Hosting**: Cloudflare Pages (`https://meme-capsule-eww.pages.dev`).
+
+---
+
+## 5. October 2026 Incident Resolution & Hardening (Option B Executed)
+
+### Root Cause Analysis:
+1. **500 Error Outage on `/api/curate/next`**: Edge code referenced `m.nsfw_flagged_by` from `013_add_nsfw_flag.sql`. The live D1 production database only had `is_nsfw` applied, missing `nsfw_flagged_by`. This crashed the endpoint with `D1_ERROR: no such column: m.nsfw_flagged_by`, prevented memes from loading, and displayed `0/4485 (0%)`.
+2. **SuperAdmin Missing AI Judges**: Query was filtering `WHERE u.username IN ('judge1', 'judge2', 'judge3')` in `summary.ts` and `memes.ts`, hiding Judge 4 and Judge 5 from progress reporting.
+3. **Data Integrity Confirmed**: All 7,183 reviews in `meme_curation` and 1,343 authoritative records in `meme_curation_final` remained 100% intact throughout.
+
+### Implemented Hardening & Option B Fixes:
+1. **Live D1 Schema Repair**: Applied `ALTER TABLE memes ADD COLUMN nsfw_flagged_by TEXT;` on live production D1. Verified column presence with `PRAGMA table_info(memes);`.
+2. **Full 5-Judge Visibility**: Updated `summary.ts` and `memes.ts` to query all 5 configured judges (`judge1` through `judge5`) using `LEFT JOIN cat_users u`, guaranteeing all judges appear with their review stats.
+3. **Strict Human Consensus Separation**: Consensus metrics (conflicts, unanimous keep, unanimous exclude, arbitration queue) are strictly calculated among human judges (`judge1`, `judge2`, `judge3`). AI Judges (4 & 5) provide reference votes only and **NEVER push conflicts or trigger arbitration**.
+4. **Guaranteed Exclude & Force-Remove Auditing**: All 5 judges have their Exclude votes (`{j.excluded}`) and Force Remove purges (`{j.force_removed}`) counted and visibly displayed. Total Exclude Votes and Total Force Removals are added as top-level KPI cards. `hardRemoveMeme` writes immutable audit entries to `meme_force_removals`.
+5. **Zero-Tolerance Schema Drift Rule**: Inscribed into `AGENT_RULES.md`, `AGENTS.md`, and `MEME_CAPSULE_KNOWLEDGE.md`, prohibiting agents from querying unverified columns.

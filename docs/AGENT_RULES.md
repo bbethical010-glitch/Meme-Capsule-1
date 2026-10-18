@@ -36,10 +36,15 @@ The following core architectural assets and components are protected. AI agents 
 - **Judge & Curator Sessions**: SHA-256 password verification and 8-hour token session management in `functions/_shared/catAuth.ts`.
 - **Admin Reset Security**: Verification code challenge for destructive admin operations (such as resetting analytics algorithms).
 
-### D. Core Working Features
+### D. Core Working Features & Consensus Rules
 - **Public Meme Delivery**: `/api/memes/random`, `/api/memes/daily`, `/api/memes/reactions`.
 - **Admin Dashboard (`/admin`)**: Storage sync from R2, SQL query execution, metadata editing, analytics resets, CSV/Excel exports.
 - **Curator & Super Admin Portal (`/curate`)**: Multi-judge login (`cat_users`), keyboard-driven curation (`meme_curation`), conflict arbitration (`CuratorResolveModal`), batch consensus, and authoritative resolutions (`meme_curation_final`).
+- **Multi-Judge Role Division (Strict Business Rule)**:
+  - **Judges 1, 2, and 3 (Human)**: Exclusively govern consensus (unanimous keep, unanimous exclude, duplicate agreement, split/conflicts) and SuperAdmin arbitration.
+  - **Judges 4 and 5 (AI Pre-Evaluators)**: Provide assistive pre-evaluations to improve human efficiency. **AI judges MUST NEVER push conflicts, arguments, or blockers onto the SuperAdmin console, nor trigger arbitration states.** Their votes are visible for human reference and quick adoption ("⚡ ADOPT DECISION") only.
+  - **All 5 Judges Visible on Dashboard**: The SuperAdmin live progress strip and comparison matrices MUST always display all 5 configured judges (3 Human + 2 AI). Never filter out Judges 4 and 5 from progress reporting.
+  - **Mandatory Exclude & Force-Remove Audit**: Every judge's "Exclude" votes (`{j.excluded}`) and "Force Remove" purges (`{j.force_removed}`) MUST be explicitly counted and visibly rendered on the SuperAdmin dashboard. All force removals must record an immutable row in `meme_force_removals`.
 
 ---
 
@@ -92,6 +97,10 @@ No task is complete until verified. Agents **MUST NOT** proclaim completion with
 1. **Build Verification**: Run `npm run build` to verify TypeScript types, Vite bundling, and asset integrity.
 2. **Zero Uncaught Errors**: Ensure no syntax errors, missing imports, or unhandled promise rejections exist in console logs.
 3. **Database & API Integrity**: Verify that SQL queries, column names, and API parameters match the actual D1 schema.
+4. **Zero-Tolerance Schema Drift Rule (CRITICAL)**:
+   - **NEVER** write or deploy edge queries selecting new or modified database columns without FIRST physically verifying the live D1 schema via `PRAGMA table_info(<table>)` or applying migration files.
+   - Presumptive querying of columns before live migration is strictly prohibited (this was the root cause of the October 2026 outage where `m.nsfw_flagged_by` crashed `/api/curate/next` with 500, locking all judges out and falsely showing 0% progress).
+   - If querying newly added metadata columns, write defensive fallbacks (e.g. `try { ... } catch { ... }` or column presence checks) to protect production availability during deployment rollouts.
 
 ---
 
@@ -133,7 +142,11 @@ Before committing and pushing to git, confirm:
 - [ ] Did I verify against `origin/main` that no remote commits conflict with or duplicate my changes?
 - [ ] Did I implement exactly what was requested without touching unrelated features?
 - [ ] Are existing working features (Public app, Admin, Curator, Reports, API) unaffected?
-- [ ] Did `npm run build` pass with 0 errors?
+- [ ] **Did I verify that all SQL column references physically exist in the live D1 schema (Zero Schema Drift)?**
+- [ ] **Are AI Judges (4 & 5) restricted to advisory pre-evaluations without pushing conflicts or arbitration to SuperAdmin?**
+- [ ] **Are all 5 configured judges visible on the SuperAdmin live progress dashboard?**
+- [ ] **Are Exclude votes and Force Remove / Purge actions counted and visible for every judge?**
+- [ ] Did `npm run build` and tests pass with 0 errors?
 - [ ] Did I remove all debug `console.log` statements, scratch files, and temporary artifacts?
 - [ ] **Are all affected Markdown documentation files updated and synchronized?**
 - [ ] Is the git commit message clear, descriptive, and formatted with conventional commits (e.g. `feat: ...`, `fix: ...`, `docs: ...`)?

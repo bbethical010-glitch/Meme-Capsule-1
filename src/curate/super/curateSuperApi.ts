@@ -24,6 +24,8 @@ export interface SuperSummaryResponse {
   resolved_active_count?: number;
   resolved_excluded_count?: number;
   total_resolved_count?: number;
+  total_force_removed?: number;
+  total_exclude_votes?: number;
   percent_resolved: number;
   consensus_metrics: {
     unreviewed: number;
@@ -41,6 +43,7 @@ export interface SuperSummaryResponse {
     excluded: number;
     duplicates: number;
     review_later: number;
+    force_removed?: number;
     last_active: string;
   }[];
   ai_judge?: {
