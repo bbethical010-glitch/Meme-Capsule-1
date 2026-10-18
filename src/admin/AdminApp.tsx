@@ -34,6 +34,7 @@ import type { MemeInputMethod, MemeStatus, Rarity } from "../types";
 import AnalyticsDashboard from "./analytics-dashboard/AnalyticsDashboard";
 import SqlRunner from "./sql-runner/SqlRunner";
 import AiTab from "./ai/AiTab";
+import AutoRefreshControl from "../components/AutoRefreshControl";
 import "./admin.css";
 
 type FormState = Omit<AdminMeme, "tags"> & {
@@ -351,6 +352,29 @@ export default function AdminApp() {
     }
   };
 
+  const handleAutoRefresh = useCallback(async () => {
+    if (!adminToken.trim()) return;
+    try {
+      const response = await fetch("/api/admin/memes", {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "X-Admin-Token": adminToken
+        },
+        cache: "no-store"
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload.memes) {
+        setCollection((payload.memes || []).map(normalizeAdminMeme));
+        setBackendConfig(payload.config || {});
+        setBackendMode(true);
+        const activeCount = (payload.memes || []).filter((m: any) => m.status === "active").length;
+        setBackendActiveCount(activeCount);
+      }
+    } catch {
+      // Silent error on background auto-refresh
+    }
+  }, [adminToken]);
+
   const useLocalMode = () => {
     setCollection(readAdminCollection());
     setBackendMode(false);
@@ -555,6 +579,12 @@ export default function AdminApp() {
               onChange={(e) => setAdminToken(e.target.value)}
             />
           </div>
+          <AutoRefreshControl
+            onRefresh={handleAutoRefresh}
+            isRefreshing={isSyncing}
+            storageKey="meme_admin_autorefresh_interval"
+            defaultInterval={0}
+          />
           <button
             onClick={adminToken ? loadBackend : saveToken}
             className="icon-btn brutalist-interactive"

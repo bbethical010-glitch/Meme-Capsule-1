@@ -9,6 +9,7 @@ import {
 } from "./curateSuperApi";
 import CuratorComparisonTable from "./CuratorComparisonTable";
 import ForceRemovalAudit from "../../categorise/superadmin/ForceRemovalAudit";
+import AutoRefreshControl from "../../components/AutoRefreshControl";
 
 interface CurateSuperDashboardProps {
   onSwitchToJudgeMode: () => void;
@@ -90,26 +91,12 @@ export default function CurateSuperDashboard({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            style={{
-              background: "#1c1b1b",
-              color: "#f4c300",
-              border: "1px solid #f4c300",
-              padding: "6px 14px",
-              fontFamily: "Anton",
-              fontSize: "12px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-          >
-            <span style={{ display: "inline-block", transform: loading ? "rotate(180deg)" : "none", transition: "transform 0.3s" }}>🔄</span>
-            {loading ? "REFRESHING..." : "REFRESH DATA"}
-          </button>
+          <AutoRefreshControl
+            onRefresh={loadData}
+            isRefreshing={loading}
+            storageKey="curate_super_autorefresh"
+            defaultInterval={10000}
+          />
 
           <button
             type="button"
@@ -169,22 +156,20 @@ export default function CurateSuperDashboard({
           <>
             {/* KPI Cards Strip */}
             {summary && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginBottom: "24px" }}>
             <div style={{ background: "#1c1b1b", border: "1px solid #444", padding: "14px" }}>
               <div style={{ fontSize: "11px", color: "#888" }}>TOTAL CORPUS</div>
               <div className="curate-anton" style={{ fontSize: "24px", color: "#fff" }}>{summary.total_memes}</div>
             </div>
 
             <div style={{ background: "#1c1b1b", border: "1px solid #34C759", padding: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: "11px", color: "#34C759" }}>ACTIVE RESOLVED</div>
-                {summary.resolved_excluded_count !== undefined && summary.resolved_excluded_count > 0 && (
-                  <span style={{ fontSize: "10px", color: "#FF3B30", fontFamily: "monospace" }} title="Authoritatively Excluded Memes">
-                    {summary.resolved_excluded_count} EXCL
-                  </span>
-                )}
-              </div>
+              <div style={{ fontSize: "11px", color: "#34C759" }}>ACTIVE RESOLVED</div>
               <div className="curate-anton" style={{ fontSize: "24px", color: "#34C759" }}>{summary.resolved_count}</div>
+            </div>
+
+            <div style={{ background: "#1c1b1b", border: "1px solid #FF3B30", padding: "14px" }}>
+              <div style={{ fontSize: "11px", color: "#FF3B30" }}>FINAL EXCLUDED</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#FF3B30" }}>{summary.resolved_excluded_count ?? 0}</div>
             </div>
 
             <div style={{ background: "#1c1b1b", border: "1px solid #FF9F0A", padding: "14px" }}>
