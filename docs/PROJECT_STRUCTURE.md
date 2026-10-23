@@ -1203,6 +1203,15 @@ meme application/
 │           │   ├── step-4-deliver.md
 │           │   └── tones.md
 │           └── SKILL.md
+├── .knowledge
+│   ├── .knowledge_meta.json
+│   ├── fetch-knowledge.ps1
+│   ├── fetch-knowledge.sh
+│   ├── update-knowledge.ps1
+│   └── update-knowledge.sh
+├── .nexus
+├── .vscode
+│   └── launch.json
 ├── .windsurf
 │   └── skills
 │       └── brag
@@ -1526,7 +1535,6 @@ meme application/
 │   │   │   ├── frame-03-at-15.038s.png
 │   │   │   └── frame-04-at-19.449s.png
 │   │   └── index.html                                # HTML entry point
-│   ├── .DS_Store
 │   ├── brag-plan.md
 │   ├── brag.mp4
 │   └── composition-brief.md
@@ -1545,8 +1553,8 @@ meme application/
 │   │   ├── 010_enforce_superadmin_active_and_cleanup_judges.sql
 │   │   ├── 011_force_removals.sql
 │   │   ├── 011_reconcile_active_and_curation_sync.sql
-│   │   └── 012_add_curation_status_to_memes.sql
-│   ├── .DS_Store
+│   │   ├── 012_add_curation_status_to_memes.sql
+│   │   └── 013_add_nsfw_flag.sql                     # D1 migration 013: is_nsfw & nsfw_flagged_by columns
 │   ├── schema.sql                                    # SQLite schema for meme metadata
 │   └── seed.sql
 ├── docs                                              # Dedicated project documentation folder
@@ -1643,11 +1651,16 @@ meme application/
 │   │   │   ├── account.ts
 │   │   │   ├── ai-presets.ts
 │   │   │   ├── ai-proxy.ts
+│   │   │   ├── approve.ts
 │   │   │   ├── export.ts
+│   │   │   ├── force-remove.ts
 │   │   │   ├── list.ts
 │   │   │   ├── next.ts
+│   │   │   ├── nsfw.ts                               # PATCH /api/curate/nsfw — Curator NSFW flag toggle
 │   │   │   ├── save.ts
 │   │   │   └── stats.ts
+│   │   ├── memes
+│   │   │   └── random.ts
 │   │   ├── contact.ts
 │   │   ├── daily-meme.ts                             # GET /api/daily-meme — public
 │   │   ├── events.ts
@@ -1746,11 +1759,11 @@ meme application/
 │   └── vite-env.d.ts                                 # Vite environment type augmentation
 ├── workers
 │   └── analyticsAggregator.ts
+├── .dev.vars
 ├── .dev.vars.example                                 # Environment variable template
-├── .DS_Store
+├── .env
 ├── .gitignore                                        # Git ignore rules
 ├── converted.pdf
-├── fetch-knowledge.ps1
 ├── FORCE_REMOVE_IMPLEMENTATION.md
 ├── FORCE_REMOVE_TODO.md
 ├── index.html                                        # HTML entry point
@@ -1760,7 +1773,6 @@ meme application/
 ├── stitch_admin.html
 ├── tsconfig.functions.json
 ├── tsconfig.json                                     # TypeScript configuration
-├── update-knowledge.ps1
 ├── vite.config.ts                                    # Vite build configuration
 └── wrangler.toml                                     # Cloudflare Workers/Pages config (NEW — Phase 2)
 ```
@@ -1791,6 +1803,8 @@ meme application/
 | `admin/upload.ts` | `POST /api/admin/upload` | Uploads image/video to R2 storage | R2 bucket |
 | `admin/sync-r2.ts` | `POST /api/admin/sync-r2` | Scans R2 and creates D1 records for untracked files | R2 bucket → D1 database |
 | `_shared/d1r2.ts` | (shared module) | D1 queries, R2 helpers, auth, fallback logic | D1, R2, fallback memes |
+| `memes/random.ts` | `GET /api/memes/random` | Returns one random active meme (accepts `?nsfw=1` or `true`) | D1 database → fallback memes |
+| `curate/nsfw.ts` | `PATCH/POST /api/curate/nsfw` | Curator NSFW flag toggle (`is_nsfw = 1/0`, `nsfw_flagged_by = 'curator'`) | D1 database |
 
 ### Data Flow
 

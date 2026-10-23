@@ -27,7 +27,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export async function fetchNextMeme(
   filter: string = "unreviewed",
   currentId?: string,
-  direction: "next" | "prev" = "next"
+  direction: "next" | "prev" = "next",
+  includeStats: boolean = false
 ): Promise<{
   meme: CurateMemeItem | null;
   stats: { total: number; reviewed: number; remaining: number; current_index: number };
@@ -36,6 +37,7 @@ export async function fetchNextMeme(
   if (filter) query.set("filter", filter);
   if (currentId) query.set("current_id", currentId);
   if (direction) query.set("direction", direction);
+  if (includeStats) query.set("include_stats", "true");
 
   const res = await fetch(`/api/curate/next?${query.toString()}`, {
     headers: getAuthHeaders(),
@@ -63,11 +65,45 @@ export async function saveCuration(payload: {
   return handleResponse(res);
 }
 
-export async function setMemeNsfw(memeId: string, isNsfw: boolean): Promise<{ success: boolean; meme_id: string; is_nsfw: boolean }> {
-  const res = await fetch("/api/curate/nsfw", {
+export async function setMemeNsfw(
+  memeId: string,
+  isNsfw: boolean
+): Promise<{ success: boolean; meme_id: string; is_nsfw: boolean | number; nsfw_flagged_by?: string | null }> {
+  const res = await fetch("/api/curate/save", {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ meme_id: memeId, is_nsfw: isNsfw })
+    body: JSON.stringify({ meme_id: memeId, moderation_only: true, is_nsfw: isNsfw })
+  });
+  return handleResponse(res);
+}
+
+export const updateMemeNsfw = setMemeNsfw;
+
+export async function approveCuration(payload: {
+  meme_id: string;
+  corpus_status: CorpusStatus;
+  duplicate_of?: string | null;
+  topics?: string[];
+  tone?: string | null;
+  humour_mechanisms?: string[];
+  curator_note?: string | null;
+  user_id?: string;
+  user_name?: string;
+  adopted_from?: "judge4" | "judge5" | "consensus" | "manual";
+}): Promise<{ success: boolean; meme_id: string; is_final: boolean }> {
+  const res = await fetch("/api/curate/approve", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload)
+  });
+  return handleResponse(res);
+}
+
+export async function forceRemoveMeme(memeId: string): Promise<{ success: boolean; meme_id: string; message: string }> {
+  const res = await fetch("/api/curate/force-remove", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ meme_id: memeId })
   });
   return handleResponse(res);
 }

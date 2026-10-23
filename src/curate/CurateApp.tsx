@@ -7,8 +7,7 @@ import {
   type CorpusStatus,
   type CuratorUser
 } from "./curateTypes";
-import { fetchNextMeme, saveCuration, setMemeNsfw } from "./curateApi";
-import { catForceRemove } from "../categorise/catApi";
+import { fetchNextMeme, approveCuration, saveCuration, forceRemoveMeme, updateMemeNsfw, setMemeNsfw } from "./curateApi";
 import EditorialButtons from "./EditorialButtons";
 import CategorizationPanel from "./CategorizationPanel";
 import CurationStatsModal from "./CurationStatsModal";
@@ -83,6 +82,7 @@ export default function CurateApp() {
   const [forceRemoveLoading, setForceRemoveLoading] = useState<boolean>(false);
   const [nsfwLoading, setNsfwLoading] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "warning" | "error" } | null>(null);
+  const isNsfw = Boolean(currentMeme?.is_nsfw);
 
   useEffect(() => {
     if (!toast) return;
@@ -112,7 +112,7 @@ export default function CurateApp() {
     onAdvance: async (decision?: AiJudgeDecision) => {
       const memeId = stateRef.current.currentMeme?.id;
       if (!memeId) return null;
-      const nextMeme = await handleSaveAndAdvance(undefined, decision);
+      const nextMeme = await handleApproveAndAdvance("manual", undefined, decision);
       return nextMeme;
     }
   });
@@ -177,13 +177,19 @@ export default function CurateApp() {
     img.src = url;
   };
 
-  const loadMeme = useCallback(async (currentId?: string, direction: "next" | "prev" = "next"): Promise<CurateMemeItem | null> => {
+  const loadMeme = useCallback(async (
+    currentId?: string,
+    direction: "next" | "prev" = "next",
+    includeStats: boolean = false
+  ): Promise<CurateMemeItem | null> => {
     if (!token) return null;
     try {
       setLoading(true);
-      const res = await fetchNextMeme(filterQueue, currentId, direction);
+      const res = await fetchNextMeme(filterQueue, currentId, direction, includeStats);
       setCurrentMeme(res.meme);
-      setStats(res.stats);
+      if (res.stats) {
+        setStats(res.stats);
+      }
 
       if (res.meme) {
         preloadImage(res.meme.image_url);
@@ -225,12 +231,16 @@ export default function CurateApp() {
 
   useEffect(() => {
     if (token && viewMode === "judge") {
-      loadMeme();
+      loadMeme(undefined, "next", true);
     }
-  }, [token, viewMode, loadMeme]);
+  }, [token, viewMode, filterQueue, loadMeme]);
 
-  // Save current decision and advance
-  const handleSaveAndAdvance = useCallback(async (forcedStatus?: CorpusStatus, forcedDecision?: AiJudgeDecision | import("./curateTypes").CuratedMemeData): Promise<CurateMemeItem | null> => {
+  // Approve current decision (atomic adoption or manual) and advance
+  const handleApproveAndAdvance = useCallback(async (
+    source: "manual" | "judge4" | "judge5" | "consensus" = "manual",
+    forcedStatus?: CorpusStatus,
+    forcedDecision?: AiJudgeDecision | import("./curateTypes").CuratedMemeData
+  ): Promise<CurateMemeItem | null> => {
     const s = stateRef.current;
     if (!s.currentMeme || s.isSaving) return null;
 
@@ -267,7 +277,7 @@ export default function CurateApp() {
     setUndoStack((prev) => [...prev.slice(-20), snapshot]);
 
     try {
-      await saveCuration({
+      await approveCuration({
         meme_id: currentMemeId,
         corpus_status: activeStatus,
         duplicate_of: activeDuplicateOf,
@@ -276,18 +286,81 @@ export default function CurateApp() {
         humour_mechanisms: activeMechanisms,
         curator_note: activeNote,
         user_id: user?.id,
-        user_name: user?.display_name
+        user_name: user?.display_name,
+        adopted_from: source
       });
+      // Optimistic local progress increment for seamless 0ms UI advancement
+      setStats((prev) => ({
+        ...prev,
+        reviewed: prev.reviewed + 1,
+        remaining: Math.max(0, prev.remaining - 1)
+      }));
     } catch (err) {
-      console.error("Failed to save curation decision:", err);
+      console.error("Failed to approve curation decision:", err);
     } finally {
       setIsSaving(false);
       stateRef.current.isSaving = false;
     }
 
-    const nextMeme = await loadMeme(currentMemeId, "next");
+    const nextMeme = await loadMeme(currentMemeId, "next", false);
     return nextMeme;
   }, [user, loadMeme]);
+
+  // Permanently delete invalid/non-meme image from R2 and database
+  const handleForceRemove = useCallback(async () => {
+    const s = stateRef.current;
+    if (!s.currentMeme || s.forceRemoveLoading || s.isSaving) return;
+    const memeId = s.currentMeme.id;
+
+    setForceRemoveLoading(true);
+    setIsSaving(true);
+    stateRef.current.isSaving = true;
+
+    try {
+      await forceRemoveMeme(memeId);
+      setToast({
+        message: "FORCE REMOVED ✓ (Purged from R2 & DB)",
+        type: "success"
+      });
+      setShowForceRemoveModal(false);
+      setForceRemoveReason("");
+      // Remove any items for this meme from undoStack since deletion is permanent
+      setUndoStack((prev) => prev.filter((item) => item.meme.id !== memeId));
+      await loadMeme(memeId, "next", true);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Force remove failed";
+      console.error("Failed to force-remove meme:", err);
+      setToast({ message: errorMsg, type: "error" });
+    } finally {
+      setForceRemoveLoading(false);
+      setIsSaving(false);
+      stateRef.current.isSaving = false;
+    }
+  }, [loadMeme]);
+
+  const handleToggleNsfw = useCallback(async () => {
+    const meme = stateRef.current.currentMeme;
+    if (!meme || nsfwLoading) return;
+
+    const nextValue = !meme.is_nsfw;
+    setNsfwLoading(true);
+    try {
+      await setMemeNsfw(meme.id, nextValue);
+      setCurrentMeme((current) =>
+        current && current.id === meme.id
+          ? { ...current, is_nsfw: nextValue, nsfw_flagged_by: nextValue ? "curator" : null }
+          : current
+      );
+      setToast({ message: nextValue ? "NSFW TAG ADDED" : "NSFW TAG REMOVED", type: "success" });
+    } catch (err: unknown) {
+      setToast({
+        message: err instanceof Error ? err.message : "Failed to update NSFW tag",
+        type: "error"
+      });
+    } finally {
+      setNsfwLoading(false);
+    }
+  }, [nsfwLoading]);
 
   // Topic Toggle (Max 3)
   const handleToggleTopic = useCallback((topicId: string) => {
@@ -336,48 +409,6 @@ export default function CurateApp() {
     setNote(last.note);
   }, []);
 
-  // Handle Force Remove
-  const handleForceRemove = useCallback(async () => {
-    const s = stateRef.current;
-    if (!s.currentMeme || s.forceRemoveLoading || !token) return;
-    setForceRemoveLoading(true);
-
-    try {
-      const res = await catForceRemove(token, s.currentMeme.id, forceRemoveReason.trim() || undefined);
-      setToast({
-        message: res.r2_deleted ? "FORCE REMOVED ✓" : (res.warning || "Meme hidden (R2 delete pending)"),
-        type: res.r2_deleted ? "success" : "warning"
-      });
-      setShowForceRemoveModal(false);
-      setForceRemoveReason("");
-      // Drop removed meme from undo stack to prevent resurrecting deleted meme
-      setUndoStack((prev) => prev.filter((item) => item.meme.id !== s.currentMeme?.id));
-      // Load next meme
-      await loadMeme(undefined, "next");
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "Force remove failed";
-      setToast({ message: errorMsg, type: "error" });
-    } finally {
-      setForceRemoveLoading(false);
-    }
-  }, [token, forceRemoveReason, loadMeme]);
-
-  const handleToggleNsfw = useCallback(async () => {
-    const meme = stateRef.current.currentMeme;
-    if (!meme || nsfwLoading) return;
-    const nextValue = !meme.is_nsfw;
-    setNsfwLoading(true);
-    try {
-      await setMemeNsfw(meme.id, nextValue);
-      setCurrentMeme((current) => current && current.id === meme.id ? { ...current, is_nsfw: nextValue } : current);
-      setToast({ message: nextValue ? "NSFW TAG ADDED" : "NSFW TAG REMOVED", type: "success" });
-    } catch (err: unknown) {
-      setToast({ message: err instanceof Error ? err.message : "Failed to update NSFW tag", type: "error" });
-    } finally {
-      setNsfwLoading(false);
-    }
-  }, [nsfwLoading]);
-
   // Conflict-free Keyboard Event Listener (Active only in Judge view)
   useEffect(() => {
     if (viewMode !== "judge") return;
@@ -416,10 +447,17 @@ export default function CurateApp() {
 
       const key = e.key.toLowerCase();
 
-      // Escape stops AI Mode if running
-      if (e.key === "Escape" && aiLoopRef.current.isRunning) {
+      // Escape stops AI Mode if running, or exits manual override back to review mode
+      if (e.key === "Escape") {
         e.preventDefault();
-        aiLoopRef.current.stop("Stopped via ESC key");
+        if (aiLoopRef.current.isRunning) {
+          aiLoopRef.current.stop("Stopped via ESC key");
+          return;
+        }
+        if (stateRef.current.overrideMode) {
+          setOverrideMode(false);
+          return;
+        }
         return;
       }
 
@@ -439,55 +477,91 @@ export default function CurateApp() {
         return;
       }
 
-      // 0. Review Mode Keymap
+      // FORCE REMOVE: Shift+Delete or Shift+Backspace (Available in both modes)
+      if (e.shiftKey && (e.key === "Delete" || e.key === "Backspace")) {
+        e.preventDefault();
+        handleForceRemove();
+        return;
+      }
+
+      // Undo: Ctrl+Z / Cmd+Z, or U / Backspace (without Shift)
+      if (((e.ctrlKey || e.metaKey) && key === "z") || key === "u" || (!e.shiftKey && e.key === "Backspace")) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // 0. REVIEW MODE KEYMAP (!overrideMode)
       if (!stateRef.current.overrideMode) {
         const j4 = stateRef.current.currentMeme?.ai_judgements?.judge4;
         const j5 = stateRef.current.currentMeme?.ai_judgements?.judge5;
-        const hasJ4 = !!j4?.corpus_status;
-        const hasJ5 = !!j5?.corpus_status;
-        const isExcluded = j4?.corpus_status === 'excluded' || j5?.corpus_status === 'excluded';
-    
-        let aiState: 'A' | 'B' | 'C' = 'C';
-        if (hasJ4 && hasJ5 && !isExcluded) {
-          if (j4.corpus_status === j5.corpus_status) {
-            aiState = 'A';
-          } else {
-            aiState = 'B';
-          }
-        }
-        const topicsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.topics].sort()) === JSON.stringify([...j5.topics].sort());
-        const mechanismsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.humour_mechanisms].sort()) === JSON.stringify([...j5.humour_mechanisms].sort());
-        const toneMatch = hasJ4 && hasJ5 && j4.tone === j5.tone;
-        const allDetailsMatch = topicsMatch && mechanismsMatch && toneMatch;
+        const hasJ4 = Boolean(j4?.corpus_status);
+        const hasJ5 = Boolean(j5?.corpus_status);
 
+        const bothEvaluated = hasJ4 && hasJ5;
+        const isStatusConsensus = bothEvaluated && j4!.corpus_status === j5!.corpus_status;
+
+        // Space OR Enter: Fast Approve / Adopt
+        if (e.key === "Enter" || e.code === "Space") {
+          e.preventDefault();
+          if (bothEvaluated && isStatusConsensus) {
+            // Full consensus: adopt consensus (defaults to J4 data)
+            handleApproveAndAdvance("consensus", j4!.corpus_status, j4!);
+            return;
+          }
+          if (hasJ4 && !hasJ5) {
+            // Single AI: instantly adopt J4
+            handleApproveAndAdvance("judge4", j4!.corpus_status, j4!);
+            return;
+          }
+          if (!hasJ4 && hasJ5) {
+            // Single AI: instantly adopt J5
+            handleApproveAndAdvance("judge5", j5!.corpus_status, j5!);
+            return;
+          }
+          if (!hasJ4 && !hasJ5) {
+            // No AI evaluation ready: switch to override mode
+            setOverrideMode(true);
+            return;
+          }
+          // In case of conflict, Enter/Space does not blind-adopt; user must press 4, 5, or O
+          return;
+        }
+
+        // Key 4: Adopt AI Judge 4
+        if (key === "4" && hasJ4) {
+          e.preventDefault();
+          handleApproveAndAdvance("judge4", j4!.corpus_status, j4!);
+          return;
+        }
+
+        // Key 5: Adopt AI Judge 5
+        if (key === "5" && hasJ5) {
+          e.preventDefault();
+          handleApproveAndAdvance("judge5", j5!.corpus_status, j5!);
+          return;
+        }
+
+        // Key O: Switch to manual override
         if (key === "o") {
           e.preventDefault();
           setOverrideMode(true);
           return;
         }
 
-        if ((e.key === "Enter" || e.code === "Space") && aiState === 'A' && allDetailsMatch) {
-          e.preventDefault();
-          handleSaveAndAdvance(); // prefilled values are already in state
-          return;
-        }
-
-        if (key === "4" && j4 && (aiState === 'B' || (aiState === 'A' && !allDetailsMatch))) {
-          e.preventDefault();
-          handleSaveAndAdvance(j4.corpus_status, j4);
-          return;
-        }
-
-        if (key === "5" && j5 && (aiState === 'B' || (aiState === 'A' && !allDetailsMatch))) {
-          e.preventDefault();
-          handleSaveAndAdvance(j5.corpus_status, j5);
-          return;
-        }
-
-        return; // Prevent Layer 0 shortcuts if not in override mode
+        return; // Prevent Layer 0 shortcuts when in Review mode
       }
 
-      // 1. Layer 0 Editorial Shortcuts
+      // 1. OVERRIDE / MANUAL MODE KEYMAP (overrideMode)
+
+      // Confirm & advance on Enter or Space
+      if (e.key === "Enter" || e.code === "Space") {
+        e.preventDefault();
+        handleApproveAndAdvance("manual");
+        return;
+      }
+
+      // Editorial status: K, X, D, R
       if (key === "k") {
         e.preventDefault();
         setStatus("keep");
@@ -496,7 +570,7 @@ export default function CurateApp() {
       if (key === "x") {
         e.preventDefault();
         setStatus("excluded");
-        handleSaveAndAdvance("excluded");
+        handleApproveAndAdvance("manual", "excluded");
         return;
       }
       if (key === "d") {
@@ -507,25 +581,11 @@ export default function CurateApp() {
       if (key === "r") {
         e.preventDefault();
         setStatus("review_later");
-        handleSaveAndAdvance("review_later");
+        handleApproveAndAdvance("manual", "review_later");
         return;
       }
 
-      // 2. Save / Advance on Enter or Space
-      if (e.key === "Enter" || e.code === "Space") {
-        e.preventDefault();
-        handleSaveAndAdvance();
-        return;
-      }
-
-      // 3. Undo on U or Backspace
-      if (key === "u" || e.key === "Backspace") {
-        e.preventDefault();
-        handleUndo();
-        return;
-      }
-
-      // 5. Topics shortcuts: 1-9, 0, -, =
+      // Topics shortcuts: 1-9, 0, -, =
       const matchedTopic = CURATION_TOPICS.find((t) => t.key.toLowerCase() === key);
       if (matchedTopic) {
         e.preventDefault();
@@ -533,7 +593,7 @@ export default function CurateApp() {
         return;
       }
 
-      // 6. Tones shortcuts: Q, W, E, A, S, F
+      // Tones shortcuts: Q, W, E, A, S, F
       const matchedTone = CURATION_TONES.find((t) => t.key.toLowerCase() === key);
       if (matchedTone) {
         e.preventDefault();
@@ -541,7 +601,7 @@ export default function CurateApp() {
         return;
       }
 
-      // 7. Mechanisms shortcuts: Z, C, V, B, N, M, J, P, O
+      // Mechanisms shortcuts: Z, C, V, B, N, M, J, P, O
       const matchedMech = CURATION_MECHANISMS.find((m) => m.key.toLowerCase() === key);
       if (matchedMech) {
         e.preventDefault();
@@ -552,7 +612,7 @@ export default function CurateApp() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [viewMode, handleSaveAndAdvance, handleUndo, handleToggleTopic, handleSelectTone, handleToggleMechanism, loadMeme, handleForceRemove]);
+  }, [viewMode, handleApproveAndAdvance, handleForceRemove, handleUndo, handleToggleTopic, handleSelectTone, handleToggleMechanism, loadMeme]);
 
   if (!token || !user) {
     return <CurateLogin onLoginSuccess={handleLoginSuccess} />;
@@ -633,7 +693,7 @@ export default function CurateApp() {
           </button>
           <button
             type="button"
-            onClick={() => loadMeme(currentMeme?.id)}
+            onClick={() => loadMeme(currentMeme?.id, "next", true)}
             disabled={loading}
             style={{
               background: "#222",
@@ -779,6 +839,39 @@ export default function CurateApp() {
                 <div style={{ fontSize: "14px", fontWeight: "bold", color: "#fff" }}>{currentMeme.title}</div>
               </div>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: isNsfw ? "rgba(221, 0, 97, 0.2)" : "#1e1e1e",
+                    border: `1px solid ${isNsfw ? "#dd0061" : "#444"}`,
+                    borderRadius: "3px",
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    userSelect: "none"
+                  }}
+                  title="Flag content as 18+ NSFW (client-gated, independent of exclude)"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isNsfw}
+                    onChange={() => handleToggleNsfw()}
+                    disabled={nsfwLoading}
+                    style={{ accentColor: "#dd0061", cursor: "pointer" }}
+                  />
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      fontFamily: "Oswald, sans-serif",
+                      color: isNsfw ? "#ff4d88" : "#aaa",
+                      letterSpacing: "0.5px"
+                    }}
+                  >
+                    🔞 NSFW {isNsfw ? "(18+)" : ""}
+                  </span>
+                </label>
                 <button
                   type="button"
                   onClick={() => setShowForceRemoveModal(true)}
@@ -822,111 +915,126 @@ export default function CurateApp() {
 
         {/* Right: Review Panel OR Override Mode */}
         <section style={{ display: "flex", flexDirection: "column" }}>
-          {(() => {
-            if (!overrideMode && currentMeme) {
-              const j4 = currentMeme.ai_judgements?.judge4;
-              const j5 = currentMeme.ai_judgements?.judge5;
-              const hasJ4 = !!j4?.corpus_status;
-              const hasJ5 = !!j5?.corpus_status;
-              const isExcluded = j4?.corpus_status === 'excluded' || j5?.corpus_status === 'excluded';
-          
-              let aiState: 'A' | 'B' | 'C' = 'C';
-              if (hasJ4 && hasJ5 && !isExcluded) {
-                if (j4.corpus_status === j5.corpus_status) {
-                  aiState = 'A';
-                } else {
-                  aiState = 'B';
-                }
-              }
-              const topicsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.topics].sort()) === JSON.stringify([...j5.topics].sort());
-              const mechanismsMatch = hasJ4 && hasJ5 && JSON.stringify([...j4.humour_mechanisms].sort()) === JSON.stringify([...j5.humour_mechanisms].sort());
-              const toneMatch = hasJ4 && hasJ5 && j4.tone === j5.tone;
-              const allDetailsMatch = topicsMatch && mechanismsMatch && toneMatch;
-
-              return (
-                <AiReviewPanel
-                  j4={j4}
-                  j5={j5}
-                  aiState={aiState}
-                  allDetailsMatch={allDetailsMatch}
-                  onEnterOverride={() => setOverrideMode(true)}
-                  onAdopt={(j) => handleSaveAndAdvance(j.corpus_status, j)}
-                />
-              );
-            }
-            return null;
-          })()}
+          {!overrideMode && currentMeme && (
+            <AiReviewPanel
+              j4={currentMeme.ai_judgements?.judge4}
+              j5={currentMeme.ai_judgements?.judge5}
+              onEnterOverride={() => setOverrideMode(true)}
+              onAdopt={(j, src) => handleApproveAndAdvance(src, j.corpus_status, j)}
+              onForceRemove={handleForceRemove}
+            />
+          )}
 
           <div style={{ display: overrideMode ? "block" : "none" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", background: "#1c1b1b", padding: "10px 14px", border: "1px solid #f4c300", boxShadow: "2px 2px 0px #f4c300" }}>
+              <span style={{ fontSize: "15px", color: "#f4c300", fontFamily: "Anton", letterSpacing: "0.5px" }}>
+                ✏️ MANUAL OVERRIDE MODE
+              </span>
+              <button
+                type="button"
+                onClick={() => setOverrideMode(false)}
+                style={{
+                  background: "#262626",
+                  border: "1px solid #555",
+                  color: "#ddd",
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  fontFamily: "Anton"
+                }}
+              >
+                BACK TO AI REVIEW [ESC]
+              </button>
+            </div>
+
             <AiPreJudgePanel prediction={currentMeme?.ai_prediction ?? null} />
 
-          {/* Layer 0: Editorial Judgment */}
-          <EditorialButtons
-            currentStatus={status}
-            duplicateOf={duplicateOf}
-            onSelectStatus={(s) => {
-              setStatus(s);
-              if (s === "excluded" || s === "review_later") {
-                handleSaveAndAdvance(s);
-              }
-            }}
-            onChangeDuplicateOf={setDuplicateOf}
-            onForceRemove={() => setShowForceRemoveModal(true)}
-            forceRemoveLoading={forceRemoveLoading}
-          />
-
-          {/* Layer 1: Multi-Dimensional Categorization (Topics, Tone, Mechanisms) */}
-          <CategorizationPanel
-            topics={topics}
-            tone={tone}
-            mechanisms={mechanisms}
-            note={note}
-            onToggleTopic={handleToggleTopic}
-            onSelectTone={handleSelectTone}
-            onToggleMechanism={handleToggleMechanism}
-            onChangeNote={setNote}
-          />
-
-          {/* Confirm & Save Button */}
-          <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
-            <button
-              type="button"
-              onClick={() => handleSaveAndAdvance()}
-              disabled={isSaving || !currentMeme}
-              style={{
-                flex: 1,
-                background: "#34C759",
-                color: "#121212",
-                border: "2px solid #f4c300",
-                padding: "12px",
-                fontFamily: "Anton",
-                fontSize: "18px",
-                cursor: "pointer",
-                boxShadow: "3px 3px 0px #f4c300"
+            {/* Layer 0: Editorial Judgment */}
+            <EditorialButtons
+              currentStatus={status}
+              duplicateOf={duplicateOf}
+              onSelectStatus={(s) => {
+                setStatus(s);
+                if (s === "excluded" || s === "review_later") {
+                  handleApproveAndAdvance("manual", s);
+                }
               }}
-            >
-              {isSaving ? "SAVING..." : "CONFIRM & ADVANCE ➔ [ENTER / SPACE]"}
-            </button>
+              onChangeDuplicateOf={setDuplicateOf}
+            />
 
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={undoStack.length === 0}
-              style={{
-                background: "#262626",
-                border: "1px solid #444",
-                color: "#f4c300",
-                padding: "12px 18px",
-                fontFamily: "Anton",
-                fontSize: "14px",
-                cursor: "pointer",
-                opacity: undoStack.length ? 1 : 0.4
-              }}
-              title="Undo last action [Key: U / Backspace]"
-            >
-              UNDO [U]
-            </button>
-          </div>
+            {/* Layer 1: Multi-Dimensional Categorization (Topics, Tone, Mechanisms) */}
+            <CategorizationPanel
+              topics={topics}
+              tone={tone}
+              mechanisms={mechanisms}
+              note={note}
+              onToggleTopic={handleToggleTopic}
+              onSelectTone={handleSelectTone}
+              onToggleMechanism={handleToggleMechanism}
+              onChangeNote={setNote}
+            />
+
+            {/* Confirm & Save Button Row */}
+            <div style={{ display: "flex", gap: "10px", marginTop: "14px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => handleApproveAndAdvance("manual")}
+                disabled={isSaving || !currentMeme}
+                style={{
+                  flex: "2 1 200px",
+                  background: "#34C759",
+                  color: "#121212",
+                  border: "2px solid #f4c300",
+                  padding: "12px",
+                  fontFamily: "Anton",
+                  fontSize: "17px",
+                  cursor: "pointer",
+                  boxShadow: "3px 3px 0px #f4c300"
+                }}
+              >
+                {isSaving ? "SAVING..." : "CONFIRM & ADVANCE ➔ [ENTER / SPACE]"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                style={{
+                  flex: "1 1 100px",
+                  background: "#262626",
+                  border: "1px solid #444",
+                  color: "#f4c300",
+                  padding: "12px 14px",
+                  fontFamily: "Anton",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  opacity: undoStack.length ? 1 : 0.4
+                }}
+                title="Undo last action [Key: U / Ctrl+Z]"
+              >
+                UNDO [U]
+              </button>
+
+              <button
+                type="button"
+                onClick={handleForceRemove}
+                disabled={isSaving || !currentMeme}
+                style={{
+                  flex: "1 1 140px",
+                  background: "#380d0d",
+                  border: "1px solid #FF3B30",
+                  color: "#FF3B30",
+                  padding: "12px 14px",
+                  fontFamily: "Anton",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  boxShadow: "2px 2px 0px #FF3B30"
+                }}
+                title="Permanently remove invalid non-meme from R2 & DB [Key: Shift+Delete]"
+              >
+                🗑️ FORCE REMOVE [SHIFT+DEL]
+              </button>
+            </div>
           </div>
         </section>
       </main>
@@ -935,25 +1043,25 @@ export default function CurateApp() {
       <footer className="curate-shortcuts-footer">
         {!overrideMode ? (
           <>
-            <span><span className="curate-hotkey-tag">ENTER</span> APPROVE</span>
+            <span><span className="curate-hotkey-tag">SPACE / ENTER</span> APPROVE</span>
             <span><span className="curate-hotkey-tag">4</span> ADOPT J4</span>
             <span><span className="curate-hotkey-tag">5</span> ADOPT J5</span>
             <span><span className="curate-hotkey-tag">O</span> OVERRIDE</span>
-            <span><span className="curate-hotkey-tag">U</span> UNDO</span>
+            <span><span className="curate-hotkey-tag">SHIFT+DEL</span> FORCE REMOVE</span>
+            <span><span className="curate-hotkey-tag">CTRL+Z / U</span> UNDO</span>
             <span><span className="curate-hotkey-tag">←/→</span> PREV/NEXT</span>
             <span style={{ color: "#dd0061" }}><span className="curate-hotkey-tag" style={{ border: "1px solid #dd0061", color: "#dd0061" }}>SHIFT+X</span> FORCE REMOVE</span>
           </>
         ) : (
           <>
-            <span><span className="curate-hotkey-tag">K</span> KEEP</span>
-            <span><span className="curate-hotkey-tag">X</span> EXCLUDE</span>
-            <span><span className="curate-hotkey-tag">D</span> DUPLICATE</span>
-            <span><span className="curate-hotkey-tag">R</span> LATER</span>
+            <span><span className="curate-hotkey-tag">SPACE / ENTER</span> CONFIRM</span>
+            <span><span className="curate-hotkey-tag">K,X,D,R</span> ACTION</span>
             <span><span className="curate-hotkey-tag">1-9,0,-,=</span> TOPICS (MAX 3)</span>
             <span><span className="curate-hotkey-tag">Q,W,E,A,S,F</span> TONE (1)</span>
-            <span><span className="curate-hotkey-tag">Z,C,V,B,N,M,J,P,O</span> MECHANISM (MAX 2)</span>
-            <span><span className="curate-hotkey-tag">ENTER</span> CONFIRM</span>
-            <span><span className="curate-hotkey-tag">U</span> UNDO</span>
+            <span><span className="curate-hotkey-tag">Z,C,V,B,N,M,J,P,O</span> MECHANISMS</span>
+            <span><span className="curate-hotkey-tag">ESC</span> AI REVIEW</span>
+            <span><span className="curate-hotkey-tag">SHIFT+DEL</span> FORCE REMOVE</span>
+            <span><span className="curate-hotkey-tag">CTRL+Z / U</span> UNDO</span>
             <span><span className="curate-hotkey-tag">←/→</span> PREV/NEXT</span>
             <span style={{ color: "#dd0061" }}><span className="curate-hotkey-tag" style={{ border: "1px solid #dd0061", color: "#dd0061" }}>SHIFT+X</span> FORCE REMOVE</span>
           </>

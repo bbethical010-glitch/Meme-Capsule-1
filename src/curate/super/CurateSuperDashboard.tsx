@@ -9,6 +9,7 @@ import {
 } from "./curateSuperApi";
 import CuratorComparisonTable from "./CuratorComparisonTable";
 import ForceRemovalAudit from "../../categorise/superadmin/ForceRemovalAudit";
+import AutoRefreshControl from "../../components/AutoRefreshControl";
 
 interface CurateSuperDashboardProps {
   onSwitchToJudgeMode: () => void;
@@ -90,26 +91,12 @@ export default function CurateSuperDashboard({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            style={{
-              background: "#1c1b1b",
-              color: "#f4c300",
-              border: "1px solid #f4c300",
-              padding: "6px 14px",
-              fontFamily: "Anton",
-              fontSize: "12px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-          >
-            <span style={{ display: "inline-block", transform: loading ? "rotate(180deg)" : "none", transition: "transform 0.3s" }}>🔄</span>
-            {loading ? "REFRESHING..." : "REFRESH DATA"}
-          </button>
+          <AutoRefreshControl
+            onRefresh={loadData}
+            isRefreshing={loading}
+            storageKey="curate_super_autorefresh"
+            defaultInterval={10000}
+          />
 
           <button
             type="button"
@@ -125,6 +112,25 @@ export default function CurateSuperDashboard({
             }}
           >
             {showForceRemovalAudit ? "BACK TO DASHBOARD" : "⚡ FORCE REMOVAL AUDIT"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.hash = "#/curate/analytics";
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+            style={{
+              background: "#f4c300",
+              color: "#111111",
+              border: "1px solid #f4c300",
+              padding: "6px 14px",
+              fontFamily: "Anton",
+              fontSize: "12px",
+              cursor: "pointer"
+            }}
+          >
+            📊 AI ANALYTICS
           </button>
 
           <button
@@ -169,42 +175,54 @@ export default function CurateSuperDashboard({
           <>
             {/* KPI Cards Strip */}
             {summary && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", marginBottom: "24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginBottom: "24px" }}>
             <div style={{ background: "#1c1b1b", border: "1px solid #444", padding: "14px" }}>
               <div style={{ fontSize: "11px", color: "#888" }}>TOTAL CORPUS</div>
-              <div className="curate-anton" style={{ fontSize: "26px", color: "#fff" }}>{summary.total_memes}</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#fff" }}>{summary.total_memes}</div>
             </div>
 
             <div style={{ background: "#1c1b1b", border: "1px solid #34C759", padding: "14px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: "11px", color: "#34C759" }}>AUTHORITATIVE RESOLVED</div>
-                {summary.resolved_excluded_count !== undefined && summary.resolved_excluded_count > 0 && (
-                  <span style={{ fontSize: "10px", color: "#FF3B30", fontFamily: "monospace" }} title="Authoritatively Excluded Memes">
-                    {summary.resolved_excluded_count} EXCL
-                  </span>
-                )}
-              </div>
-              <div className="curate-anton" style={{ fontSize: "26px", color: "#34C759" }}>{summary.resolved_count}</div>
+              <div style={{ fontSize: "11px", color: "#34C759" }}>ACTIVE RESOLVED</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#34C759" }}>{summary.resolved_count}</div>
+            </div>
+
+            <div style={{ background: "#1c1b1b", border: "1px solid #FF3B30", padding: "14px" }}>
+              <div style={{ fontSize: "11px", color: "#FF3B30" }}>FINAL EXCLUDED</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#FF3B30" }}>{summary.resolved_excluded_count ?? 0}</div>
             </div>
 
             <div style={{ background: "#1c1b1b", border: "1px solid #FF9F0A", padding: "14px" }}>
-              <div style={{ fontSize: "11px", color: "#FF9F0A" }}>CONFLICTING / SPLIT</div>
-              <div className="curate-anton" style={{ fontSize: "26px", color: "#FF9F0A" }}>
+              <div style={{ fontSize: "11px", color: "#FF9F0A" }}>HUMAN CONFLICTS</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#FF9F0A" }}>
                 {summary.consensus_metrics.conflicts}
               </div>
             </div>
 
             <div style={{ background: "#1c1b1b", border: "1px solid #9b30ff", padding: "14px" }}>
               <div style={{ fontSize: "11px", color: "#9b30ff" }}>UNANIMOUS KEEP</div>
-              <div className="curate-anton" style={{ fontSize: "26px", color: "#9b30ff" }}>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#9b30ff" }}>
                 {summary.consensus_metrics.unanimous_keep}
               </div>
             </div>
 
             <div style={{ background: "#1c1b1b", border: "1px solid #FF3B30", padding: "14px" }}>
               <div style={{ fontSize: "11px", color: "#FF3B30" }}>UNANIMOUS EXCLUDE</div>
-              <div className="curate-anton" style={{ fontSize: "26px", color: "#FF3B30" }}>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#FF3B30" }}>
                 {summary.consensus_metrics.unanimous_exclude}
+              </div>
+            </div>
+
+            <div style={{ background: "#1c1b1b", border: "1px solid #FF3B30", padding: "14px" }}>
+              <div style={{ fontSize: "11px", color: "#FF3B30" }}>TOTAL EXCLUDE VOTES</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#FF3B30" }}>
+                {summary.total_exclude_votes ?? 0}
+              </div>
+            </div>
+
+            <div style={{ background: "#1c1b1b", border: "1px solid #FF453A", padding: "14px" }}>
+              <div style={{ fontSize: "11px", color: "#FF453A" }}>FORCE REMOVED</div>
+              <div className="curate-anton" style={{ fontSize: "24px", color: "#FF453A" }}>
+                {summary.total_force_removed ?? 0}
               </div>
             </div>
           </div>
@@ -214,9 +232,14 @@ export default function CurateSuperDashboard({
         {summary && summary.judges.length > 0 && (
           <div style={{ background: "#181818", border: "1px solid #333", padding: "16px", marginBottom: "24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 className="curate-anton" style={{ margin: 0, fontSize: "16px", color: "#f4c300" }}>
-                CURATOR / JUDGES LIVE PROGRESS ({summary.judges.length} ACTIVE)
-              </h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <h3 className="curate-anton" style={{ margin: 0, fontSize: "16px", color: "#f4c300" }}>
+                  CURATOR / JUDGES LIVE PROGRESS ({summary.judges.length} ACTIVE)
+                </h3>
+                <span style={{ fontSize: "11px", color: "#888", fontFamily: "monospace" }}>
+                  (Judges 1–3: Human Consensus • Judges 4–5: AI Advisory)
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={loadData}
@@ -226,23 +249,41 @@ export default function CurateSuperDashboard({
               </button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
-              {summary.judges.map((j) => (
-                <div key={j.user_id} style={{ background: "#222", border: "1px solid #3d3d3d", padding: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <strong style={{ color: "#fff", fontSize: "14px" }}>{j.user_name}</strong>
-                    <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#f4c300" }}>{j.total_reviewed} reviewed</span>
+              {summary.judges.map((j) => {
+                const isAiJudge = j.user_name.toLowerCase().includes("four") || j.user_name.toLowerCase().includes("five") || j.user_name.toLowerCase().includes("ai");
+                return (
+                  <div key={j.user_id} style={{ background: "#222", border: isAiJudge ? "1px dashed #555" : "1px solid #3d3d3d", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <div>
+                        <strong style={{ color: "#fff", fontSize: "14px" }}>{j.user_name}</strong>
+                        <span style={{
+                          fontSize: "9px",
+                          marginLeft: "6px",
+                          padding: "1px 5px",
+                          borderRadius: "2px",
+                          background: isAiJudge ? "#333" : "#9b30ff",
+                          color: isAiJudge ? "#f4c300" : "#fff",
+                          fontFamily: "monospace"
+                        }}>
+                          {isAiJudge ? "AI ADVISORY" : "HUMAN"}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#f4c300" }}>{j.total_reviewed} reviewed</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "#aaa", flexWrap: "wrap", marginTop: "8px" }}>
+                      <span style={{ color: "#34C759" }}>{j.kept} Kept</span>
+                      <span>•</span>
+                      <span style={{ color: "#FF3B30", fontWeight: "bold" }}>{j.excluded} Excl</span>
+                      <span>•</span>
+                      <span style={{ color: "#FF9F0A" }}>{j.duplicates} Dup</span>
+                      <span>•</span>
+                      <span style={{ color: "#f4c300" }}>{j.review_later} Later</span>
+                      <span>•</span>
+                      <span style={{ color: "#FF453A", fontWeight: "bold" }}>{j.force_removed ?? 0} Purged</span>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "#aaa" }}>
-                    <span style={{ color: "#34C759" }}>{j.kept} Kept</span>
-                    <span>•</span>
-                    <span style={{ color: "#FF3B30" }}>{j.excluded} Excl</span>
-                    <span>•</span>
-                    <span style={{ color: "#FF9F0A" }}>{j.duplicates} Dup</span>
-                    <span>•</span>
-                    <span style={{ color: "#f4c300" }}>{j.review_later} Later</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
