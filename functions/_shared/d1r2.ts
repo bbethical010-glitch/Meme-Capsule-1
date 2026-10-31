@@ -8,6 +8,9 @@ export type Env = {
   R2_PUBLIC_URL?: string;
   ANALYTICS_KV?: KVNamespace;
   ANALYTICS_APP_TOKEN?: string;
+  FIREBASE_PROJECT_ID?: string;
+  FIREBASE_CLIENT_EMAIL?: string;
+  FIREBASE_PRIVATE_KEY?: string;
 };
 
 export interface CatUser {
